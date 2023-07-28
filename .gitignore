@@ -1,0 +1,17 @@
+protocol.code-workspace
+TODO.txt
+.vscode/launch.json
+__pycache__/__init__.cpython-39.pyc
+__pycache__/calc.cpython-39.pyc
+__pycache__/core.cpython-39.pyc
+__pycache__/functions_cached.cpython-39.pyc
+__pycache__/functions.cpython-39.pyc
+__pycache__/graph.cpython-39.pyc
+__pycache__/initialization.cpython-39.pyc
+__pycache__/interface.cpython-39.pyc
+__pycache__/parser.cpython-39.pyc
+__pycache__/preprocessing.cpython-39.pyc
+__pycache__/routines.cpython-39.pyc
+__pycache__/settings.cpython-39.pyc
+__pycache__/types_.cpython-39.pyc
+__pycache__/util.cpython-39.pyc

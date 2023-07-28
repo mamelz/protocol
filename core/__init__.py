@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 import textwrap
 
 from ..graph import GraphNodeMeta, GraphNodeNONE
-from ..parser import ProtocolConfiguration
+from ..parser_ import ProtocolConfiguration
 from ..routines import RoutineABC, PropagationRoutine
 from ..types_ import FrozenDict
 
