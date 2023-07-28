@@ -1,4 +1,4 @@
 protocol.code-workspace
 TODO.txt
 .vscode/launch.json
-**/__pycache__
+*.pyc
