@@ -1,0 +1,32 @@
+---
+schedules:
+  - start_time: 0.0
+    stages:
+      - evolution: yes
+        propagation_time: 10.0
+        monitoring_stepsize: 0.5
+        monitoring:
+          - name: total_sz
+          - name: bipent_center
+        tasks:
+          - routines:
+            - name: rotate_local_spin
+              time: 0.0
+              kwargs:
+                site_idx: -1
+                phi: 1.0
+                xyz: "x"
+      - tasks:
+          - routines:
+            - name: rotate_local_spin
+              kwargs:
+                site_idx: 0
+                phi: 1.0
+                xyz: "y"
+      - evolution: true
+        propagation_time: 6.0
+        monitoring_stepsize: 2.0
+        tasks:
+          - routines:
+            - name: total_sz
+              time: 16.0

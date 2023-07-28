@@ -1,0 +1,17 @@
+---
+schedules:
+  - start_time: 0.0
+    stages:
+      - tasks:
+          - routines:
+            - name: bipent_arr
+            - name: psi
+      - evolution: true
+        propagation_time: 10.0
+        monitoring_stepsize: 1.0
+        tasks:
+        - routines:
+      - tasks:
+          - routines:
+            - name: bipent_arr
+            - name: psi

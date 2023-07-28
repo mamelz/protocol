@@ -1,0 +1,225 @@
+"""Module containing classes for preprocessing of protocol options."""
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..core import Protocol, ProtocolGraph
+    from ..graph import GraphNodeBase
+
+from abc import ABC, abstractmethod
+import numpy as np
+
+
+class PreprocessorABC(ABC):
+    """Abstract base class for Preprocessors. They process options
+    of the given objects, modifying them if needed.
+    """
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def run(self):
+        """Performs the preprocessing."""
+        pass
+
+
+class ProtocolPreprocessor(PreprocessorABC):
+    """Class for preprocessing the entire protocol."""
+    def __init__(self, protocol: Protocol, forced_start_time: float = None):
+        self._protocol = protocol
+        self._graph_preprocessors: tuple[ProtocolGraphPreprocessor] = ()
+        self._start_time = forced_start_time
+        for graph in self._protocol.graphs:
+            self._graph_preprocessors += (
+                ProtocolGraphPreprocessor(graph, self._start_time),)
+
+    def run(self):
+        for preproc in self._graph_preprocessors:
+            preproc.run()
+        return
+
+
+class ProtocolGraphPreprocessor(PreprocessorABC):
+    """Class for preprocessing a graph of a protocol."""
+    def __init__(self, graph: ProtocolGraph, forced_start_time: float = None):
+        self._graph = graph
+        self._schedule_preprocessor = None
+        self._start_time = forced_start_time
+        if self._start_time is None:
+            try:
+                self._start_time = self._graph.root.options["start_time"]
+            except KeyError:
+                try:
+                    self._start_time = self._graph._protocol.global_options[
+                        "graph"]["start_time"]
+                except KeyError:
+                    self._start_time = 0.0
+        self._graph.tstate.set_t0(self._start_time)
+        self._schedule_preprocessor = SchedulePreprocessor(
+            self._graph.root, self._start_time)
+
+    def run(self):
+        self._schedule_preprocessor.run()
+        for routine in self._graph.leafs:
+            if "kwargs" not in routine._options:
+                routine._options["kwargs"] = {}
+        self._graph.graph_ready = True
+        return
+
+
+class SchedulePreprocessor(PreprocessorABC):
+    """Class for preprocessing a schedule node."""
+    def __init__(self, schedule: GraphNodeBase, start_time: float):
+        self._schedule = schedule
+        self._start_time = start_time
+        self._stage_preprocessors: tuple[StagePreprocessor] = ()
+        for stage in self._schedule.children:
+            self._stage_preprocessors += (StagePreprocessor(stage),)
+
+    def run(self):
+        start_time = self._start_time
+        for preproc in self._stage_preprocessors:
+            preproc.setStartTime(start_time)
+            start_time = preproc.run()
+        return
+
+
+class StagePreprocessor(PreprocessorABC):
+    """Class for preprocessing a stage. In evolution stages, monitoring and
+    propagation routines will automatically be created.
+    """
+    @classmethod
+    def check_node_empty(cls, node: GraphNodeBase):
+        if node.IS_LEAF():
+            return node._options == {}
+        if node.num_children == 0:
+            return True
+        for child in node.children:
+            if not cls.check_node_empty(child):
+                return False
+        return True
+
+    def __init__(self, stage: GraphNodeBase):
+        self._stage = stage
+        self._start_time = None
+
+    def setStartTime(self, time: float):
+        self._start_time = time
+
+    def run(self) -> float:
+        """Configures stage options for time evolution, if necessary.
+        Returns the time of the last timestep of the stage, returns the
+        start time if the stage is not an evolution stage.
+        """
+        if self._start_time is None:
+            raise ValueError("Stage start time must be set, first.")
+
+        try:
+            evolution = self._stage.options["evolution"]
+        except KeyError:
+            evolution = False
+        if not evolution:
+            return self._start_time
+
+        propagation_time = self._stage.options["propagation_time"]
+        propagation_stepsize = self._stage.options["monitoring_stepsize"]
+        propagation_numsteps =\
+            int(propagation_time // propagation_stepsize) + 1
+        stage_stop_time = self._start_time + propagation_time
+
+        try:
+            monitoring_routines: tuple[dict] =\
+                self._stage.options["monitoring"]
+        except KeyError:
+            monitoring_routines = []
+        for routine in monitoring_routines:
+            routine["TYPE"] = "MONITORING"
+        monitoring_routines = tuple(monitoring_routines)
+
+        extra_routine_times = (self._start_time,)
+        last_routine_time = None
+        for task in self._stage.children:
+            for routine in task.children:
+                routine_time = routine.options["time"]
+                if routine_time < self._start_time or (
+                        routine_time > stage_stop_time):
+                    raise ValueError(
+                        f"Stage {self._stage.ID.local}: Routine time outside"
+                        " of stage time range.")
+                if last_routine_time is not None and (
+                        routine_time < last_routine_time):
+                    raise ValueError(
+                        f"Stage {self._stage.ID.local}: Routine times between"
+                        " tasks must not overlap.")
+                extra_routine_times += (routine_time,)
+            last_routine_time = routine_time
+
+        timesteps_arr = np.array(extra_routine_times)
+        monitoring_arr = ()
+        if monitoring_routines != ():
+            monitoring_arr = np.linspace(self._start_time,
+                                         self._start_time + propagation_time,
+                                         propagation_numsteps,
+                                         endpoint=True)
+            timesteps_arr = np.append(timesteps_arr, monitoring_arr)
+            timesteps_arr = np.unique(timesteps_arr)
+        timesteps_gen = (time for time in timesteps_arr)
+
+        # Creates options for propagation routine of given stepsize.
+        def propagation_routine(timestep: float):
+            return {
+                "name": "PROPAGATE",
+                "step": timestep,
+            }
+
+        new_children_dict = {task.ID: () for task in self._stage.children}
+        time = next(timesteps_gen)
+        prior_time = time
+        _first_loop_token = True
+        _monitoring_token = True
+        for task in self._stage.children:
+            for routine in task.children:
+                routine._options["TYPE"] = "EXTRA"
+                if routine.options["time"] > prior_time and (
+                        not _first_loop_token):
+                    time = next(timesteps_gen)
+                while time < routine.options["time"]:
+                    if not _first_loop_token and prior_time != time:
+                        new_children_dict[task.ID] += (propagation_routine(
+                            time - prior_time),)
+                        _monitoring_token = True
+                    if time in monitoring_arr and _monitoring_token:
+                        new_children_dict[task.ID] += monitoring_routines
+                    _monitoring_token = False
+                    _first_loop_token = False
+                    prior_time = time
+                    time = next(timesteps_gen)
+
+                if prior_time != time:
+                    new_children_dict[task.ID] += (propagation_routine(
+                        time - prior_time),)
+                    _monitoring_token = True
+                if time in monitoring_arr and _monitoring_token:
+                    new_children_dict[task.ID] += monitoring_routines
+                    _monitoring_token = False
+                new_children_dict[task.ID] += (routine._options,)
+                prior_time = time
+                _first_loop_token = False
+
+        # prior_time = time
+        ID = self._stage.children[-1].ID
+        for time in timesteps_gen:
+            new_children_dict[ID] += (propagation_routine(time - prior_time),)
+            new_children_dict[ID] += monitoring_routines
+            prior_time = time
+
+        for task in self._stage.children:
+            task.emptyChildren()
+            for new_child in new_children_dict[task.ID]:
+                task.addChild(new_child)
+
+        # at end of stage, always return state
+        self._stage.children[-1].addChild({"name": "psi",
+                                           "store_token": "LAST_PSI",
+                                           "TYPE": "AUTOMATIC"})
+        return stage_stop_time
