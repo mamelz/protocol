@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from ..core import Protocol
     from ..graph import GraphNodeBase
-    from ..interface import PropagatorFactory
+    from ..interface import _PropagatorFactory
     from ..routines import RoutineABC
 
 from ..interface import UserTState
@@ -18,7 +18,7 @@ from ..routines import PropagationRoutine, RegularRoutine
 class ProtocolGraph:
     """Class representing a schedule of the protocol"""
     def __init__(self, protocol: Protocol, root_node: GraphNodeBase,
-                 state: ndarray, propagator_factory: PropagatorFactory,
+                 state: ndarray, propagator_factory: _PropagatorFactory,
                  label=None):
         self._protocol = protocol
         self._root_node = root_node
