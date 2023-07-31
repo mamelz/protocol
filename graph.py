@@ -13,7 +13,7 @@ from typing import Mapping, Union
 
 from .settings import SETTINGS
 
-_VERBOSE = SETTINGS["VERBOSE"]
+_VERBOSE = SETTINGS.VERBOSE
 
 
 @dataclass(frozen=True)

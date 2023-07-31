@@ -2,3 +2,5 @@ protocol.code-workspace
 TODO.txt
 .vscode/
 **/__pycache__
+BACKEND/*.py
+!BACKEND/__init__.py

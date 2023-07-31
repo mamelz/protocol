@@ -9,6 +9,7 @@ import textwrap
 from ..graph import GraphNodeMeta, GraphNodeNONE
 from ..parser_ import ProtocolConfiguration
 from ..routines import RoutineABC, PropagationRoutine
+from ..settings import SETTINGS
 from ..types_ import FrozenDict
 
 from .preprocessor import ProtocolPreprocessor
@@ -93,6 +94,8 @@ class Protocol:
         """Initialize protocol, optionally forcing a start time for all
         graphs.
         """
+        if not SETTINGS.check():
+            raise ValueError("Library settings not complete.")
         if len(self.graphs) == 0:
             raise ValueError("Protocol does not contain any graphs.")
 
