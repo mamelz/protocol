@@ -10,7 +10,7 @@ from ..graph import GraphNodeMeta, GraphNodeNONE
 from ..parser_ import ProtocolConfiguration
 from ..routines import RoutineABC, PropagationRoutine
 from ..settings import SETTINGS
-from ..types_ import FrozenDict
+from ..utils import FrozenDict
 
 from .preprocessor import ProtocolPreprocessor
 from .protocolgraph import ProtocolGraph

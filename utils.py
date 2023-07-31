@@ -1,4 +1,4 @@
-"""Module containing some useful custom types."""
+"""Useful tools."""
 import collections
 
 

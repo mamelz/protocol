@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from .backend import RoutineFunction
-from .types_ import FrozenDict
+from .utils import FrozenDict
 
 
 class RoutineABC(ABC):
@@ -104,10 +104,8 @@ class RegularRoutine(RoutineABC):
             bound_arguments = partial_sig.bind(*args, **kwargs)
             bound_arguments.apply_defaults()
 
-            def _wrapped_func(_):
-                return self._rfunction(*bound_arguments.args,
-                                       **bound_arguments.kwargs)
-            return _wrapped_func
+            return lambda _: self._rfunction(*bound_arguments.args,
+                                             **bound_arguments.kwargs)
 
         else:
             partial_parameters = [partial_sig.parameters[param] for param
@@ -116,11 +114,8 @@ class RegularRoutine(RoutineABC):
             bound_arguments = partial_sig.bind(*args, **kwargs)
             bound_arguments.apply_defaults()
 
-            def _wrapped_func(psi):
-                return self._rfunction(psi,
-                                       *bound_arguments.args,
-                                       **bound_arguments.kwargs)
-            return _wrapped_func
+            return lambda psi: self._rfunction(psi, *bound_arguments.args,
+                                               **bound_arguments.kwargs)
 
     def __call__(self, tstate: TimedState):
         result = self._rfunction_partial(tstate.psi)
