@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from .BACKEND import RoutineFunction
+from .backend import RoutineFunction
 from .types_ import FrozenDict
 
 
