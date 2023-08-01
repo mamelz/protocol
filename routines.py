@@ -65,7 +65,7 @@ class RegularRoutine(RoutineABC):
     def __init__(self, node: GraphNodeBase, protocol: Protocol):
         super().__init__(node, protocol)
         self._external_kwargs = ()
-        for key, kwarg in self.options.items():
+        for key, kwarg in self.kwargs.items():
             if kwarg == "EXTERNAL":
                 self._external_kwargs += (key,)
         self._get_external_kwargs()
@@ -77,6 +77,10 @@ class RegularRoutine(RoutineABC):
         self._rfunction_partial = self._make_rfunction_partial()
 
     @property
+    def kwargs(self) -> dict:
+        return self.options["kwargs"]
+
+    @property
     def store_token(self):
         if self.options["store_token"] is not None:
             return self.options["store_token"]
@@ -85,7 +89,7 @@ class RegularRoutine(RoutineABC):
 
     def _get_external_kwargs(self):
         for key in self._external_kwargs:
-            self.options[key] = self._node.options["external"][self.name][key]
+            self.kwargs[key] = self._node.options["external"][self.name][key]
         self._external_kwargs = ()
         return
 
