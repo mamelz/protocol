@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import h5py
 
+import sys
 import textwrap
 from typing import Any, Sequence, Union
 
@@ -102,6 +103,7 @@ class Protocol:
             else:
                 output_text = text_prefix
             print(output_text)
+            sys.stdout.flush()
 
             if output is None:
                 continue
@@ -135,11 +137,13 @@ class Protocol:
             return self._graphs[self._label_map[identifier]]
         raise TypeError("Invalid identifier type.")
 
-    def setLiveTracking(self, name_tuple: Union[str, tuple[str]]):
+    def setLiveTracking(self, names: Union[str, tuple[str]]):
         """Specifies functions, the output of which shall be printed
         during calculation.
         """
-        self.live_tracking = name_tuple
+        if isinstance(names, str):
+            names = (names,)
+        self.live_tracking = names
 
     def addGraph(self, graph_options, *pgraph_init_args, **pgraph_init_kwargs):
         """Adds a ProtocolGraph to the protocol."""
@@ -169,9 +173,10 @@ class Protocol:
         except KeyError:
             raise KeyError(f"Option '{key}' not found.")
 
-    def getOutput(self, quantities: Sequence = (), graph_id=None):
-        """Returns the time-ordered sequence of measurements with the
-        specified names. If no graph is specified, returns a dictionary
+    def getOutput(self, quantities: Sequence = (), graph_id=None)\
+            -> dict[str, dict[str, dict[float, Any]]]:
+        """Returns the time-resolved sequence of measurements of the
+        specified quantities. If no graph is specified, returns a dictionary
         with outputs of all graphs, using the graph number or (if available)
         graph labels as keys.
         If no measurement name is specified, the dictionary contains all
@@ -226,9 +231,9 @@ class Protocol:
 
         for graph in self._graphs:
             graph.makeRoutines()
-        for routine in graph.ROUTINES:
-            if routine.store_token in self.live_tracking:
-                routine.enableLiveTracking()
+            for routine in graph.ROUTINES:
+                if routine.store_token in self.live_tracking:
+                    routine.enableLiveTracking()
         self._finalized = True
 
     def PERFORM(self, n=None):
