@@ -61,7 +61,7 @@ class Protocol:
         # assert len(self._options["schedules"]) == 1
         return self._options["schedules"]
 
-    def graph(self, identifier):
+    def graph(self, identifier: Union[float, str]) -> ProtocolGraph:
         """Returns graph, either with specified number or specified label."""
         if isinstance(identifier, float):
             return self._graphs[identifier]

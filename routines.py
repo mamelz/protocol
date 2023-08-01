@@ -89,7 +89,7 @@ class RegularRoutine(RoutineABC):
 
     def _get_external_kwargs(self):
         for key in self._external_kwargs:
-            self.kwargs[key] = self._node.options["external"][self.name][key]
+            self.kwargs[key] = self._node.external_options[self.name][key]
         self._external_kwargs = ()
         return
 

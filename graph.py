@@ -162,6 +162,16 @@ class GraphNodeBase:
         return GraphNodeOptions(self)
 
     @property
+    def external_options(self) -> dict:
+        """External routine options, not defined by yaml file."""
+        try:
+            return self._options["external"]
+        except KeyError:
+            if self._RANK == 0:
+                raise KeyError("No external options set.")
+            return self.parent.external_options
+
+    @property
     def map(self) -> dict[GraphNodeID, GraphNodeBase]:
         """Returns a dictionary, containing the {ID: Node} pairs of the node
         and all lower-rank nodes of the branch.
