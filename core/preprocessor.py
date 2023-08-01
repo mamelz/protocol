@@ -29,7 +29,7 @@ class ProtocolPreprocessor(PreprocessorABC):
         self._protocol = protocol
         self._graph_preprocessors: tuple[ProtocolGraphPreprocessor] = ()
         self._start_time = forced_start_time
-        for graph in self._protocol.graphs:
+        for graph in self._protocol._graphs:
             self._graph_preprocessors += (
                 ProtocolGraphPreprocessor(graph, self._start_time),)
 
