@@ -1,11 +1,13 @@
 """General library settings."""
+import os
 from types import FunctionType
 
 
+_FUNCTIONS_PATH = os.getenv("PROTOCOL_FUNCTIONS_PATH")
+
 _SETTINGS = {
     "VERBOSE": False,
-    "FUNCTIONS_PATH": ("/nfs/home2/mamelz/github/.protocol_testing"
-                       "/functions.py"),
+    "FUNCTIONS_PATH": _FUNCTIONS_PATH,
 }
 
 
