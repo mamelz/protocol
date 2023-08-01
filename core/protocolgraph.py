@@ -10,8 +10,10 @@ if TYPE_CHECKING:
     from ..interface import _PropagatorFactory
     from ..routines import RoutineABC
 
-from ..interface import UserTState
+from typing import Any
+
 from ..graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
+from ..interface import UserTState
 from ..routines import PropagationRoutine, RegularRoutine
 
 
@@ -26,7 +28,7 @@ class ProtocolGraph:
         self.tstate = UserTState(self.options["start_time"], state,
                                  propagator_factory, label=label)
         self.ROUTINES: tuple[RoutineABC] = ()
-        self.RESULTS: dict[float, dict] = {}
+        self.RESULTS: dict[str, dict[float, Any]] = {}
         self.graph_ready = False
 
     def __repr__(self) -> str:

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     import h5py
 
 import textwrap
-from typing import Any, Union
+from typing import Any, Sequence, Union
 
 from ..graph import GraphNodeMeta, GraphNodeNONE
 from ..parser_ import ProtocolConfiguration
@@ -32,7 +32,7 @@ class Protocol:
         self.sys_params = sys_params
         self.output_file = output_file
         self._graphs: tuple[ProtocolGraph] = ()
-        self._labeled_graphs = {}
+        self._label_map: dict[str, int] = {}
 # TODO
 #        if options is not None:
 #            self._graphs =\
@@ -40,9 +40,13 @@ class Protocol:
 #                      in self._options["schedules"])
         self.live_tracking = ()
         self.RESULTS: dict[Union[float, str], dict[float, dict[str, Any]]] = {}
-        self.initialized = False
-        self.finalized = False
-        self.protocol_ready = False
+        self._initialized = False
+        self._finalized = False
+        self._graphs_performed: tuple[float] = ()
+
+    @property
+    def num_graphs(self):
+        return len(self._graphs)
 
     @property
     def global_options(self) -> dict:
@@ -61,76 +65,12 @@ class Protocol:
         # assert len(self._options["schedules"]) == 1
         return self._options["schedules"]
 
-    def graph(self, identifier: Union[float, str]) -> ProtocolGraph:
-        """Returns graph, either with specified number or specified label."""
-        if isinstance(identifier, float):
-            return self._graphs[identifier]
-        if isinstance(identifier, str):
-            return self._labeled_graphs[identifier]
-
-    def setLiveTracking(self, name_tuple: tuple[str]):
-        """Specifies functions, the output of which shall be printed
-        during calculation.
-        """
-        self.live_tracking = name_tuple
-
-    def addGraph(self, graph_options, *pgraph_init_args, **pgraph_init_kwargs):
-        """Adds a ProtocolGraph to the protocol."""
-        schedule_class = GraphNodeMeta.fromRank(0, self._RANK_NAMES)
-        graph = ProtocolGraph(self, schedule_class(GraphNodeNONE(),
-                                                   graph_options),
-                              *pgraph_init_args, **pgraph_init_kwargs)
-        self._graphs += (graph,)
-        if graph.label is not None:
-            self._labeled_graphs[graph.label] = graph
-        return
-
-    def setGlobalOptions(self, config: ProtocolConfiguration):
-        if isinstance(config, ProtocolConfiguration):
-            self._options.update(config.global_options)
-            return
-        if not isinstance(config, dict):
-            raise ValueError
-        self._options.update(config)
-        return
-
-    def getOptions(self, key):
-        try:
-            return self.global_options[key]
-        except KeyError:
-            raise KeyError(f"Option '{key}' not found.")
-
     def _preprocessor(self, _start_time=None):
         return ProtocolPreprocessor(self, _start_time)
 
-    def INITIALIZE(self, _start_time=None):
-        """Initialize protocol, optionally forcing a start time for all
-        graphs.
-        """
-        if not SETTINGS.check():
-            raise ValueError("Library settings not complete.")
-        if len(self._graphs) == 0:
-            raise ValueError("Protocol does not contain any graphs.")
-
-        self._preprocessor(_start_time=_start_time).run()
-        self._options["io_options"]["ofile"] = self.output_file
-        self.initialized = True
-
-    def FINALIZE(self):
-        if not self.initialized:
-            raise ValueError("Protocol must be initialized, first.")
-
-        for graph in self._graphs:
-            graph.makeRoutines()
-        for routine in graph.ROUTINES:
-            if routine.store_token in self.live_tracking:
-                routine.enableLiveTracking()
-        self.finalized = True
-
-    def PERFORM(self, n):
-        """Performs schedule i."""
-        if not self.finalized:
-            raise ValueError("Protocol must be finalized, first.")
+    def _perform_n(self, n: int):
+        if isinstance(self.RESULTS, FrozenDict):
+            self.RESULTS = dict(self.RESULTS)
 
         graph: ProtocolGraph = self._graphs[n]
         num_stages = len(graph.getRank(1))
@@ -145,8 +85,10 @@ class Protocol:
             else:
                 name_string = (f"{routine._TYPE:>10}"
                                f" {routine.store_token:<20}")
+            schedule_name = n + 1 if graph.label is None else (
+                f"'{graph.label}'")
             text_prefix = " | ".join([
-                f"SCHEDULE {n + 1:>2}:",
+                f"SCHEDULE {schedule_name:>6}:",
                 f"STAGE {stage_idx:>3}/{num_stages:<3}",
                 f"ROUTINE {i + 1:>{len(str(len(graph.ROUTINES)))}}"  # no comma
                 f"/{len(graph.ROUTINES)}",
@@ -164,15 +106,141 @@ class Protocol:
             if output is None:
                 continue
 
-            if graph.tstate.time not in graph.RESULTS:
-                graph.RESULTS[graph.tstate.time] = {output[0]: [output[1]]}
+            if output[0] not in graph.RESULTS:
+                graph.RESULTS[output[0]] = {graph.tstate.time: output[1]}
             else:
-                if output[0] not in graph.RESULTS[graph.tstate.time].keys():
-                    graph.RESULTS[graph.tstate.time][output[0]] = [output[1]]
-                else:
-                    graph.RESULTS[graph.tstate.time][output[0]] += [output[1]]
+                graph.RESULTS[output[0]].update({graph.tstate.time: output[1]})
+
+
+#            if graph.tstate.time not in graph.RESULTS:
+#                graph.RESULTS[graph.tstate.time] = {output[0]: [output[1]]}
+#            else:
+#                if output[0] not in graph.RESULTS[graph.tstate.time].keys():
+#                    graph.RESULTS[graph.tstate.time][output[0]] = [output[1]]
+#                else:
+#                    graph.RESULTS[graph.tstate.time][output[0]] += [output[1]]
 
         if graph.label is not None:
             self.RESULTS[graph.label] = graph.RESULTS
-            self.RESULTS[i] = graph.RESULTS
+        self.RESULTS[n] = graph.RESULTS
         self.RESULTS = FrozenDict(self.RESULTS)
+        self._graphs_performed += (n,)
+        return
+
+    def graph(self, identifier: Union[int, str]) -> ProtocolGraph:
+        """Returns graph, either with specified number or specified label."""
+        if isinstance(identifier, int):
+            return self._graphs[identifier]
+        if isinstance(identifier, str):
+            return self._graphs[self._label_map[identifier]]
+        raise TypeError("Invalid identifier type.")
+
+    def setLiveTracking(self, name_tuple: Union[str, tuple[str]]):
+        """Specifies functions, the output of which shall be printed
+        during calculation.
+        """
+        self.live_tracking = name_tuple
+
+    def addGraph(self, graph_options, *pgraph_init_args, **pgraph_init_kwargs):
+        """Adds a ProtocolGraph to the protocol."""
+        schedule_class = GraphNodeMeta.fromRank(0, self._RANK_NAMES)
+        graph = ProtocolGraph(self, schedule_class(GraphNodeNONE(),
+                                                   graph_options),
+                              *pgraph_init_args, **pgraph_init_kwargs)
+        self._graphs += (graph,)
+        if graph.label is not None:
+            if graph.label in self._label_map:
+                raise ValueError(f"Graph label {graph.label} already exists.")
+            self._label_map[graph.label] = len(self._graphs) - 1
+        return
+
+    def setGlobalOptions(self, config: ProtocolConfiguration):
+        if isinstance(config, ProtocolConfiguration):
+            self._options.update(config.global_options)
+            return
+        if not isinstance(config, dict):
+            raise ValueError
+        self._options.update(config)
+        return
+
+    def getOptions(self, key):
+        try:
+            return self.global_options[key]
+        except KeyError:
+            raise KeyError(f"Option '{key}' not found.")
+
+    def getOutput(self, quantities: Sequence = (), graph_id=None):
+        """Returns the time-ordered sequence of measurements with the
+        specified names. If no graph is specified, returns a dictionary
+        with outputs of all graphs, using the graph number or (if available)
+        graph labels as keys.
+        If no measurement name is specified, the dictionary contains all
+        available results.
+        """
+        if isinstance(quantities, str):
+            quantities = (quantities,)
+
+        output_dict = {}
+        if graph_id is None:
+            graphs = self._graphs_performed
+        else:
+            graphs = (graph_id,)
+
+        for identifier in graphs:
+            key = self.graph(identifier).label
+            if key is None:
+                key = identifier
+            output_dict[key] = {}
+
+        if graph_id is not None and (
+                graph_id not in output_dict):
+            assert len(output_dict.values()) == 0
+            output_dict[graph_id] = output_dict.values()[0]
+
+        if quantities == ():
+            for graph_idt in output_dict.keys():
+                output_dict[graph_idt] = self.graph(graph_idt).RESULTS
+        else:
+            for graph_idt in output_dict.keys():
+                for qname in quantities:
+                    output_dict[graph_idt][qname] = self.graph(
+                        graph_idt).RESULTS[qname]
+        return FrozenDict(output_dict)
+
+    def INITIALIZE(self, _start_time=None):
+        """Initialize protocol, optionally forcing a start time for all
+        graphs.
+        """
+        if not SETTINGS.check():
+            raise ValueError("Library settings not complete.")
+        if len(self._graphs) == 0:
+            raise ValueError("Protocol does not contain any graphs.")
+
+        self._preprocessor(_start_time=_start_time).run()
+        self._options["io_options"]["ofile"] = self.output_file
+        self._initialized = True
+
+    def FINALIZE(self):
+        if not self._initialized:
+            raise ValueError("Protocol must be initialized, first.")
+
+        for graph in self._graphs:
+            graph.makeRoutines()
+        for routine in graph.ROUTINES:
+            if routine.store_token in self.live_tracking:
+                routine.enableLiveTracking()
+        self._finalized = True
+
+    def PERFORM(self, n=None):
+        """Performs schedule n. If no argument is passed, performs
+        all schedules.
+        """
+        if not self._finalized:
+            raise ValueError("Protocol must be finalized, first.")
+
+        if n is None:
+            for i in range(self.num_graphs):
+                self._perform_n(i)
+        else:
+            self._perform_n(n)
+        return
