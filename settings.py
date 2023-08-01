@@ -59,13 +59,3 @@ class Settings:
 
 
 SETTINGS = Settings(_SETTINGS)
-
-
-if __name__ == "__main__":
-    print(Settings._KEYS)
-    settings = Settings(_SETTINGS)
-    print(settings.FUNCTIONS_PATH)
-    print(settings.VERBOSE)
-    print(settings.check())
-    settings.setOption("FUNCTIONS_PATH", "A")
-    print(settings.check())
