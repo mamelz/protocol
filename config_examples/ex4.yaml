@@ -14,5 +14,5 @@ schedules:
               time: 0.0
               kwargs:
                 site_idx: -1
-                phi: 1.0
+                phi: EXTERNAL
                 xyz: "x"

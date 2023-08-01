@@ -64,6 +64,11 @@ class RegularRoutine(RoutineABC):
 
     def __init__(self, node: GraphNodeBase, protocol: Protocol):
         super().__init__(node, protocol)
+        self._external_kwargs = ()
+        for key, kwarg in self.options.items():
+            if kwarg == "EXTERNAL":
+                self._external_kwargs += (key,)
+        self._get_external_kwargs()
         if "TYPE" not in node._options:
             self._TYPE = "IRREGULAR"
         else:
@@ -78,14 +83,19 @@ class RegularRoutine(RoutineABC):
         else:
             return self.options["name"]
 
+    def _get_external_kwargs(self):
+        for key in self._external_kwargs:
+            self.options[key] = self._node.options["external"][self.name][key]
+        self._external_kwargs = ()
+        return
+
     def _make_rfunction_partial(self) -> Callable:
         """Sets all parameters of the function except for 'psi'"""
-        args = []
+        args = ()
         for key in self._rfunction.positional_args.keys():
             if key == "psi":
                 continue
-            args += [FrozenDict(self.options[key])]
-        args = tuple(args)
+            args += (FrozenDict(self.options[key]),)
 
         # all other arguments are passed as kwargs
         kwargs: dict = FrozenDict(self.options["kwargs"])

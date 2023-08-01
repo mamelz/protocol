@@ -22,6 +22,7 @@ class ProtocolGraph:
                  label=None):
         self._protocol = protocol
         self._root_node = root_node
+        self._external_options = {}
         self.tstate = UserTState(self.options["start_time"], state,
                                  propagator_factory, label=label)
         self.ROUTINES: tuple[RoutineABC] = ()
@@ -37,17 +38,6 @@ class ProtocolGraph:
     @property
     def label(self):
         return self.tstate.label
-
-    def makeRoutines(self):
-        if not self.graph_ready:
-            raise ValueError("ProtocolGraph must be configured, first."
-                             " Call .preprocessor().configure()")
-
-        for node in self.getRank(-1):
-            if node.options["name"] == "PROPAGATE":
-                self.ROUTINES += (PropagationRoutine(node, self._protocol),)
-            else:
-                self.ROUTINES += (RegularRoutine(node, self._protocol),)
 
     @property
     def options(self) -> dict:
@@ -74,6 +64,27 @@ class ProtocolGraph:
     def depth(self):
         """Number of ranks in the graph."""
         return len(max(self.map.keys(), key=lambda ID: len(ID.tuple)).tuple)
+
+    def makeRoutines(self):
+        if not self.graph_ready:
+            raise ValueError("ProtocolGraph must be configured, first."
+                             " Call .preprocessor().configure()")
+
+        for node in self.getRank(-1):
+            if node.options["name"] == "PROPAGATE":
+                self.ROUTINES += (PropagationRoutine(node, self._protocol),)
+            else:
+                self.ROUTINES += (RegularRoutine(node, self._protocol),)
+
+    def setExternalKwargs(self, kwargs: dict):
+        """Sets keyword arguments for routines of given name. Routines will
+        infer the parameter, if the respective entry in the config file
+        contains the 'EXTERNAL' keyword (case sensitive).
+        Format of input is:
+        {<function_name>: {<kwarg_name>: <kwarg_value>}}
+        """
+        self._external_kwargs = kwargs
+        self._root_node.options["external"] = self._external_kwargs
 
     def getRank(self, rank: int) -> tuple[GraphNodeBase]:
         """Return all nodes with given rank. 'rank' -1 returns the leafs"""

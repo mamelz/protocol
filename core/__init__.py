@@ -30,10 +30,11 @@ class Protocol:
         self._options = options if options is not None else {}
         self.sys_params = sys_params
         self.output_file = output_file
-        self.graphs: tuple[ProtocolGraph] = ()
+        self._graphs: tuple[ProtocolGraph] = ()
+        self._labeled_graphs = {}
 # TODO
 #        if options is not None:
-#            self.graphs =\
+#            self._graphs =\
 #                tuple(self.addGraph(schedule_options) for schedule_options
 #                      in self._options["schedules"])
         self.live_tracking = ()
@@ -59,6 +60,13 @@ class Protocol:
         # assert len(self._options["schedules"]) == 1
         return self._options["schedules"]
 
+    def graph(self, identifier):
+        """Returns graph, either with specified number or specified label."""
+        if isinstance(identifier, float):
+            return self._graphs[identifier]
+        if isinstance(identifier, str):
+            return self._labeled_graphs[identifier]
+
     def setLiveTracking(self, name_tuple: tuple[str]):
         """Specifies functions, the output of which shall be printed
         during calculation.
@@ -71,7 +79,10 @@ class Protocol:
         graph = ProtocolGraph(self, schedule_class(GraphNodeNONE(),
                                                    graph_options),
                               *pgraph_init_args, **pgraph_init_kwargs)
-        self.graphs += (graph,)
+        self._graphs += (graph,)
+        if graph.label is not None:
+            self._labeled_graphs[graph.label] = graph
+        return
 
     def setGlobalOptions(self, config: ProtocolConfiguration):
         if isinstance(config, ProtocolConfiguration):
@@ -80,6 +91,7 @@ class Protocol:
         if not isinstance(config, dict):
             raise ValueError
         self._options.update(config)
+        return
 
     def getOptions(self, key):
         try:
@@ -96,7 +108,7 @@ class Protocol:
         """
         if not SETTINGS.check():
             raise ValueError("Library settings not complete.")
-        if len(self.graphs) == 0:
+        if len(self._graphs) == 0:
             raise ValueError("Protocol does not contain any graphs.")
 
         self._preprocessor(_start_time=_start_time).run()
@@ -107,7 +119,7 @@ class Protocol:
         if not self.initialized:
             raise ValueError("Protocol must be initialized, first.")
 
-        for graph in self.graphs:
+        for graph in self._graphs:
             graph.makeRoutines()
         for routine in graph.ROUTINES:
             if routine.store_token in self.live_tracking:
@@ -119,7 +131,7 @@ class Protocol:
         if not self.finalized:
             raise ValueError("Protocol must be finalized, first.")
 
-        graph: ProtocolGraph = self.graphs[n]
+        graph: ProtocolGraph = self._graphs[n]
         num_stages = len(graph.getRank(1))
         assert isinstance(graph, ProtocolGraph)
         for i, routine in enumerate(graph.ROUTINES):
