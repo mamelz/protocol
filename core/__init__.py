@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     import h5py
 
 import textwrap
+from typing import Any, Union
 
 from ..graph import GraphNodeMeta, GraphNodeNONE
 from ..parser_ import ProtocolConfiguration
@@ -38,7 +39,7 @@ class Protocol:
 #                tuple(self.addGraph(schedule_options) for schedule_options
 #                      in self._options["schedules"])
         self.live_tracking = ()
-        self.RESULTS: dict[dict[float, dict[str]]] = {}
+        self.RESULTS: dict[Union[float, str], dict[float, dict[str, Any]]] = {}
         self.initialized = False
         self.finalized = False
         self.protocol_ready = False
@@ -173,6 +174,5 @@ class Protocol:
 
         if graph.label is not None:
             self.RESULTS[graph.label] = graph.RESULTS
-        else:
             self.RESULTS[i] = graph.RESULTS
         self.RESULTS = FrozenDict(self.RESULTS)
