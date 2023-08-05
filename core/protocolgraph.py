@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from ..core import Protocol
     from ..graph import GraphNodeBase
-    from ..interface import _PropagatorFactory
+    from ..interface import TimedState
     from ..routines import RoutineABC
 
 from typing import Any
@@ -19,14 +19,12 @@ from ..routines import PropagationRoutine, RegularRoutine
 
 class ProtocolGraph:
     """Class representing a schedule of the protocol"""
-    def __init__(self, protocol: Protocol, root_node: GraphNodeBase,
-                 state: ndarray, propagator_factory: _PropagatorFactory,
-                 label=None):
+    def __init__(self, protocol: Protocol, root_options: dict):
         self._protocol = protocol
-        self._root_node = root_node
+        root_class = GraphNodeMeta.fromRank(0, self._protocol._RANK_NAMES)
+        self._root_node = root_class(GraphNodeNONE(), root_options)
         self._external_options = {}
-        self.tstate = UserTState(self.options["start_time"], state,
-                                 propagator_factory, label=label)
+        self.tstate: TimedState = None
         self.ROUTINES: tuple[RoutineABC] = ()
         self.RESULTS: dict[str, dict[float, Any]] = {}
         self.graph_ready = False
@@ -39,7 +37,9 @@ class ProtocolGraph:
 
     @property
     def label(self):
-        return self.tstate.label
+        if self.tstate is not None:
+            return self.tstate.label
+        return
 
     @property
     def options(self) -> dict:
@@ -66,6 +66,10 @@ class ProtocolGraph:
     def depth(self):
         """Number of ranks in the graph."""
         return len(max(self.map.keys(), key=lambda ID: len(ID.tuple)).tuple)
+
+    def initTState(self, state: ndarray, propagator_factory, label):
+        self.tstate = UserTState(self.options["start_time"], state,
+                                 propagator_factory, label=label)
 
     def makeRoutines(self):
         if not self.graph_ready:

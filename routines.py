@@ -59,7 +59,7 @@ class RoutineABC(ABC):
 
 class RegularRoutine(RoutineABC):
     """Class for arbitrary, non-propagating manipulations on the state."""
-    _ROUTINE_MANDATORY_KEYS = ("name", "io_options", "sys_params", "kwargs")
+    _ROUTINE_MANDATORY_KEYS = ("name", "sys_params", "kwargs")
     _ROUTINE_OPTIONAL_KEYS = {"output": True, "store_token": None}
 
     def __init__(self, node: GraphNodeBase, protocol: Protocol):

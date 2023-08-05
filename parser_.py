@@ -6,8 +6,10 @@ import yaml
 
 
 class ProtocolConfiguration(UserDict):
-    """Class for parsing options from YAML file."""
-    _MANDATORY_KEYS = ("schedules", "io_options", "global_schedule_options")
+    """Class representing the configuration of the protocol,
+    parsed from YAML file.
+    """
+    _MANDATORY_KEYS = ("schedules",)
 
     def __init__(self, yaml_path: str):
         if not yaml_path.upper().endswith(".YAML"):
@@ -15,12 +17,12 @@ class ProtocolConfiguration(UserDict):
                              " in YAML format.")
         self._path = yaml_path
         with open(self._path, "r") as stream:
-            raw_options = yaml.safe_load(stream)
-        super().__init__(raw_options)
+            options_dict = yaml.safe_load(stream)
+        super().__init__(options_dict)
         for key in self._MANDATORY_KEYS:
-            if key in raw_options:
-                continue
-            self[key] = {}
+            if key not in options_dict:
+                raise ValueError("Protocol configuration is"
+                                 f" missing key '{key}'")
 
     @property
     def global_options(self):
@@ -38,15 +40,6 @@ class ProtocolConfiguration(UserDict):
     @schedules.setter
     def schedules(self, input):
         self["schedules"] = input
-        return
-
-    @property
-    def io_options(self):
-        return self["io_options"]
-
-    @io_options.setter
-    def io_options(self, input):
-        self["io_options"] = input
         return
 
     @property
