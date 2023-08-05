@@ -31,36 +31,29 @@ class ProtocolConfiguration(UserDict):
             global_options[key] = self[key]
         return global_options
 
-    def _generic_option_get(self, option_name):
-        return self[option_name]
-
-    def _generic_option_set(self, option_name, new_option):
-        self[option_name] = new_option
-        return
-
     @property
     def schedules(self):
-        return self._generic_option_get("schedules")
+        return self["schedules"]
 
     @schedules.setter
     def schedules(self, input):
-        self._generic_option_set("schedules", input)
+        self["schedules"] = input
         return
 
     @property
     def io_options(self):
-        return self._generic_option_get("io_options")
+        return self["io_options"]
 
     @io_options.setter
     def io_options(self, input):
-        self._generic_option_set("io_options", input)
+        self["io_options"] = input
         return
 
     @property
     def global_schedule_options(self):
-        return self._generic_option_get("global_schedule_options")
+        return self["global_schedule_options"]
 
     @global_schedule_options.setter
     def global_schedule_options(self, input):
-        self._generic_option_set("global_schedule_options", input)
+        self["global_schedule_options"] = input
         return
