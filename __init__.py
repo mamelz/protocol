@@ -4,3 +4,6 @@ if not SETTINGS.check():
     raise ValueError("Package not configured yet.")
 
 from .core import Protocol
+
+
+__all__ = ["Protocol"]
