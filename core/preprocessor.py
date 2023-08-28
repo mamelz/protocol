@@ -114,6 +114,9 @@ class StagePreprocessor(PreprocessorABC):
         if self._start_time is None:
             raise ValueError("Stage start time must be set, first.")
 
+        for routine in self._stage.leafs:
+            routine._options["TYPE"] = "USER"
+
         try:
             evolution = self._stage.options["evolution"]
         except KeyError:
@@ -172,53 +175,67 @@ class StagePreprocessor(PreprocessorABC):
                 "step": timestep,
             }
 
-        new_children_dict = {task.ID: () for task in self._stage.children}
+        new_routines_dict = {task.ID: () for task in self._stage.children}
         time = next(timesteps_gen)
         prior_time = time
         _first_loop_token = True
         _monitoring_token = True
         for task in self._stage.children:
             for routine in task.children:
-                routine._options["TYPE"] = "EXTRA"
                 if routine.options["time"] > prior_time and (
                         not _first_loop_token):
                     time = next(timesteps_gen)
                 while time < routine.options["time"]:
                     if not _first_loop_token and prior_time != time:
-                        new_children_dict[task.ID] += (propagation_routine(
+                        new_routines_dict[task.ID] += (propagation_routine(
                             time - prior_time),)
                         _monitoring_token = True
                     if time in monitoring_arr and _monitoring_token:
-                        new_children_dict[task.ID] += monitoring_routines
+                        new_routines_dict[task.ID] += monitoring_routines
                     _monitoring_token = False
                     _first_loop_token = False
                     prior_time = time
                     time = next(timesteps_gen)
 
                 if prior_time != time:
-                    new_children_dict[task.ID] += (propagation_routine(
+                    new_routines_dict[task.ID] += (propagation_routine(
                         time - prior_time),)
                     _monitoring_token = True
                 if time in monitoring_arr and _monitoring_token:
-                    new_children_dict[task.ID] += monitoring_routines
+                    new_routines_dict[task.ID] += monitoring_routines
                     _monitoring_token = False
-                new_children_dict[task.ID] += (routine._options,)
+                new_routines_dict[task.ID] += (routine._options,)
                 prior_time = time
                 _first_loop_token = False
 
-        # prior_time = time
-        ID = self._stage.children[-1].ID
-        for time in timesteps_gen:
-            new_children_dict[ID] += (propagation_routine(time - prior_time),)
-            new_children_dict[ID] += monitoring_routines
-            prior_time = time
+        # if stage configuration contained no tasks, add empty task to create
+        # routines
+        if self._stage.num_children == 0:
+            self._stage.addChild()
+            last_task_id = self._stage.children[-1].ID
+            new_routines_dict = {last_task_id: ()}
+            for time in timesteps_arr:
+                if prior_time != time:
+                    new_routines_dict[last_task_id] += (
+                        propagation_routine(time - prior_time),)
+                new_routines_dict[last_task_id] += monitoring_routines
+                prior_time = time
+        # if stage configuration contained tasks, create remaining routines
+        # in last task
+        else:
+            last_task_id = self._stage.children[-1].ID
+            for time in timesteps_gen:
+                new_routines_dict[last_task_id] += (
+                    propagation_routine(time - prior_time),)
+                new_routines_dict[last_task_id] += monitoring_routines
+                prior_time = time
 
         for task in self._stage.children:
             task.emptyChildren()
-            for new_child in new_children_dict[task.ID]:
+            for new_child in new_routines_dict[task.ID]:
                 task.addChild(new_child)
 
-        # at end of stage, always return state
+        # at end of time evolution, always return state
         self._stage.children[-1].addChild({"name": "psi",
                                            "store_token": "LAST_PSI",
                                            "TYPE": "AUTOMATIC"})

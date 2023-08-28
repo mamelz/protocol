@@ -83,10 +83,7 @@ class GraphNodeMeta(type):
 
 
 class GraphNodeBase:
-    """Base class for nodes of the graph.
-    By using the 'GraphNodeMeta' metaclass, the constructor can
-    be invoked recursively.
-    """
+    """Base class for nodes of the graph."""
     _RANK_NAMES: tuple[str]
     _RANK: int
     _CHILD_CLASS: GraphNodeMeta
@@ -153,6 +150,22 @@ class GraphNodeBase:
         return self._LEAF_RANK()
 
     @property
+    def root(self) -> GraphNodeBase:
+        """Returns the highest-rank parent node."""
+        return self.parent_of_rank(0)
+
+    @property
+    def leafs(self) -> tuple[GraphNodeBase]:
+        """The lowest-rank child nodes that originate from this node."""
+        if self.IS_LEAF():
+            return (self,)
+
+        leafs_tuple = ()
+        for child in self.children:
+            leafs_tuple += child.leafs
+        return leafs_tuple
+
+    @property
     def num_children(self):
         """The number of children of this node."""
         return len(self.children)
@@ -185,8 +198,12 @@ class GraphNodeBase:
         result.update(children_map)
         return result
 
-    def addChild(self, options):
-        """Adds a child node with given options."""
+    def addChild(self, options=None):
+        """Adds a child node with given options.
+        If options is None, creates empty child node.
+        """
+        if options is None:
+            options = {}
         self.children += (self._CHILD_CLASS(self, options),)
         return
 
@@ -206,11 +223,6 @@ class GraphNodeBase:
     def parent_of_rank(self, n) -> GraphNodeBase:
         """Returns the parent with specified rank."""
         return self.nth_parent(self.rank - n)
-
-    @property
-    def root(self) -> GraphNodeBase:
-        """Returns the highest-rank parent node."""
-        return self.parent_of_rank(0)
 
 # TODO
 #    def _leafs(self, _leafs=()):
