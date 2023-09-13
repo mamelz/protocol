@@ -31,11 +31,11 @@ class Settings:
 
     def __init__(self, dict: dict):
         self._settings = dict
-        self._setOptionsFromDict()
+        self._set_options_from_dict()
         for key in self._KEYS:
             setattr(self, key, self._settings[key])
 
-    def _setOptionsFromDict(self):
+    def _set_options_from_dict(self):
         for key, opt in self._settings.items():
             if key not in self._KEYS:
                 raise KeyError(f"Unknown settings key '{key}'.")
@@ -53,9 +53,9 @@ class Settings:
             return False
         return True
 
-    def setOption(self, key, value):
+    def set_option(self, key, value):
         self._settings[key] = value
-        self._setOptionsFromDict()
+        self._set_options_from_dict()
 
 
 SETTINGS = Settings(_SETTINGS)

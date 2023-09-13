@@ -3,7 +3,8 @@ import collections
 
 
 class FrozenDict(collections.Mapping):
-    """Immutable dictionary-like type. Found at:
+    """
+    Immutable dictionary-like type. Found at:
     https://stackoverflow.com/questions/2703599/what-would-a-frozen-dict-be
     """
 

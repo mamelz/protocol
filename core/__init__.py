@@ -18,13 +18,15 @@ from .protocolgraph import ProtocolGraph
 
 
 class Protocol:
-    """Main object containing all necessary information for performing
+    """
+    Main object containing all necessary information for performing
     the calculations on a quantum state.
     """
     _RANK_NAMES = ("Schedule", "Stage", "Task", "Routine")
 
     def __init__(self, configuration: ProtocolConfiguration = None):
-        """If 'configuration' is None, initializes empty protocol.
+        """
+        If 'configuration' is None, initializes empty protocol.
         Schedules and global options can be added later on.
         """
         self._config = configuration
@@ -40,10 +42,6 @@ class Protocol:
         self._graphs_performed: tuple[float] = ()
 
     @property
-    def num_graphs(self):
-        return len(self._graphs)
-
-    @property
     def global_options(self) -> dict:
         res = {}
         for key in self._config:
@@ -53,6 +51,11 @@ class Protocol:
 #                res["graph"] = self._options[key]
 #                del res["global_schedule_options"]
         return res
+
+    @property
+    def num_schedules(self):
+        """The number of schedules currently initialized."""
+        return len(self._graphs)
 
     @property
     def schedule_options(self) -> list[dict]:
@@ -67,7 +70,7 @@ class Protocol:
             self.results = dict(self.results)
 
         graph: ProtocolGraph = self._graphs[n]
-        num_stages = len(graph.getRank(1))
+        num_stages = len(graph.get_rank(1))
         assert isinstance(graph, ProtocolGraph)
         for i, routine in enumerate(graph.ROUTINES):
             assert isinstance(routine, RoutineABC)
@@ -113,41 +116,13 @@ class Protocol:
         self._graphs_performed += (n,)
         return
 
-    def schedule(self, identifier: Union[int, str]) -> ProtocolGraph:
-        """Returns schedule, either with specified number or specified label.
+    def add_schedule(self, graph_options, **tstate_args):
         """
-        if isinstance(identifier, int):
-            return self._graphs[identifier]
-        if isinstance(identifier, str):
-            return self._graphs[self._label_map[identifier]]
-        raise TypeError("Invalid identifier type.")
-
-    def setLiveTracking(self, names: Union[str, tuple[str]]):
-        """Specifies functions, the output of which shall be printed
-        during calculation.
-        """
-        if isinstance(names, str):
-            names = (names,)
-        self.live_tracking = names
-
-    def setTState(self, schedule_id: Union[int, str], state: ndarray,
-                  propagator_factory, label=None):
-        """Sets the time-dependent state of the specified schedule.
-        The schedule can be specified by label or number.
-        """
-        schedule = self.schedule(schedule_id)
-        schedule.initTState(state, propagator_factory, label)
-        if schedule.label is not None:
-            self._label_map[schedule.label] = self._graphs.index(schedule)
-        return
-
-    def addSchedule(self, graph_options, **tstate_args):
-        """Adds a schedule to the protocol, optionally setting
-        the tstate aswell.
+        Adds a schedule to the protocol, optionally setting the tstate aswell.
         """
         graph = ProtocolGraph(self, graph_options)
         if tstate_args is not None:
-            graph.initTState(**tstate_args)
+            graph.init_tstate(**tstate_args)
         self._graphs += (graph,)
         if graph.label is not None:
             if graph.label in self._label_map:
@@ -155,27 +130,32 @@ class Protocol:
             self._label_map[graph.label] = len(self._graphs) - 1
         return
 
-    def duplicateSchedule(self, id, **tstate_args):
-        """Adds a schedule to the protocol, using the options of some schedule
+    def duplicate_schedule(self, id, **tstate_args):
+        """
+        Adds a schedule to the protocol, using the options of some schedule
         already contained in the protocol.
         """
-        self.addSchedule(self.schedule(id).root._options, **tstate_args)
+        self.add_schedule(self.schedule(id).root._options, **tstate_args)
         return
 
-    def setGlobalOptions(self, config: dict):
-        if not isinstance(config, dict):
-            raise ValueError
-        if "schedules" in config:
-            raise ValueError("Global options cannot contain key 'schedules'.")
-        self._config.update(config)
-        return
+    def finalize(self):
+        if not self._initialized:
+            raise ValueError("Protocol must be initialized, first.")
 
-    def getOptions(self, key):
+        for graph in self._graphs:
+            graph.make_routines()
+            for routine in graph.ROUTINES:
+                if routine.store_token in self.live_tracking:
+                    routine.enable_live_tracking()
+        self._finalized = True
+
+    def get_options(self, key):
         return self.global_options[key]
 
-    def getOutput(self, quantities: Sequence = (), graph_id=None)\
+    def get_output(self, quantities: Sequence = (), graph_id=None)\
             -> dict[str, dict[str, dict[float, Any]]]:
-        """Returns the time-resolved sequence of measurements of the
+        """
+        Returns the time-resolved sequence of measurements of the
         specified quantities. If no graph is specified, returns a dictionary
         with outputs of all graphs, using the graph number or (if available)
         graph labels as keys.
@@ -213,8 +193,8 @@ class Protocol:
         return FrozenDict(output_dict)
 
     def initialize(self, _start_time=None):
-        """Initialize protocol, optionally forcing a start time for all
-        graphs.
+        """
+        Initialize protocol, optionally forcing a start time for all graphs.
         """
         if not SETTINGS.check():
             raise ValueError("Library settings not complete.")
@@ -228,28 +208,58 @@ class Protocol:
 
         self._preprocessor(_start_time=_start_time).run()
         self._initialized = True
-
-    def finalize(self):
-        if not self._initialized:
-            raise ValueError("Protocol must be initialized, first.")
-
-        for graph in self._graphs:
-            graph.makeRoutines()
-            for routine in graph.ROUTINES:
-                if routine.store_token in self.live_tracking:
-                    routine.enableLiveTracking()
-        self._finalized = True
+        return
 
     def perform(self, n=None):
-        """Performs schedule n. If no argument is passed, performs
-        all schedules.
+        """
+        Performs schedule n. If no argument is passed, performs all schedules.
         """
         if not self._finalized:
             raise ValueError("Protocol must be finalized, first.")
 
         if n is None:
-            for i in range(self.num_graphs):
+            for i in range(self.num_schedules):
                 self._perform_n(i)
         else:
             self._perform_n(n)
+        return
+
+    def schedule(self, identifier: Union[int, str]) -> ProtocolGraph:
+        """
+        Returns schedule, either with specified number or specified label.
+        """
+        if isinstance(identifier, int):
+            return self._graphs[identifier]
+        if isinstance(identifier, str):
+            return self._graphs[self._label_map[identifier]]
+        raise TypeError("Invalid identifier type.")
+
+    def set_global_options(self, config: dict):
+        if not isinstance(config, dict):
+            raise ValueError
+        if "schedules" in config:
+            raise ValueError("Global options cannot contain key 'schedules'.")
+        self._config.update(config)
+        return
+
+    def set_live_tracking(self, names: Union[str, tuple[str]]):
+        """
+        Specifies functions, the output of which shall be printed during
+        calculation.
+        """
+        if isinstance(names, str):
+            names = (names,)
+        self.live_tracking = names
+        return
+
+    def set_tstate(self, schedule_id: Union[int, str], state: ndarray,
+                   propagator_factory, label=None):
+        """
+        Sets the time-dependent state of the specified schedule.
+        The schedule can be specified by label or number.
+        """
+        schedule = self.schedule(schedule_id)
+        schedule.init_tstate(state, propagator_factory, label)
+        if schedule.label is not None:
+            self._label_map[schedule.label] = self._graphs.index(schedule)
         return

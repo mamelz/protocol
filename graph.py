@@ -18,17 +18,18 @@ _VERBOSE = SETTINGS.VERBOSE
 
 @dataclass(frozen=True)
 class GraphNodeID:
-    """Unique immutable ID for nodes of the graph.
+    """
+    Unique immutable ID for nodes of the graph.
     """
     tuple: tuple
 
-    @property
-    def rank(self):
-        return len(self.tuple) - 1
+    def __str__(self):
+        return f"{self.tuple}"
 
     @property
     def local(self):
-        """The index of the node in the local tree, i.e. the index
+        """
+        The index of the node in the local tree, i.e. the index
         in the parent's children list.
         """
         return self.tuple[-1]
@@ -38,8 +39,9 @@ class GraphNodeID:
         """ID of the parent node."""
         return GraphNodeID(self.tuple[:-1])
 
-    def __str__(self):
-        return f"{self.tuple}"
+    @property
+    def rank(self):
+        return len(self.tuple) - 1
 
 
 class GraphNodeMeta(type):
@@ -63,7 +65,6 @@ class GraphNodeMeta(type):
 
         _leaf_rank = len(cls._RANK_NAMES) - 1
 
-        # ID = getIDFromParent(parent)
         if parent.rank == _leaf_rank:
             return GraphNodeNONE
 
@@ -103,7 +104,10 @@ class GraphNodeBase:
 
     @classmethod
     def rank_name(cls, rank=None) -> str:
-        """The name of a specified rank."""
+        """
+        The name of a specified rank. If rank is None, returns rank name
+        of node.
+        """
         if rank is None:
             return cls._RANK_NAMES[cls._RANK]
         elif rank <= cls._LEAF_RANK():
@@ -112,19 +116,20 @@ class GraphNodeBase:
             return None
 
     @classmethod
-    def IS_LEAF(cls) -> bool:
-        """Returns True when this node is a leaf node, i.e. has
-        lowest possible rank.
+    @property
+    def isleaf(cls) -> bool:
+        """
+        True when this node is a leaf node, i.e. has lowest possible rank.
         """
         return (cls._RANK == cls._LEAF_RANK())
 
     def __init__(self, parent: GraphNodeBase, options: dict):
-        self.parent = parent
+        self._parent = parent
         self._options = options
-        self.ID = self._getIDFromParent(parent)
+        self._ID = self._getIDFromParent(parent)
         if _VERBOSE:
             print(f"{self.rank_name(self.rank).upper()}: {self.ID}")
-        self.children: tuple[GraphNodeBase] = ()
+        self._children: tuple[GraphNodeBase] = ()
         children_rank_name = self.rank_name(self.rank + 1)
         if children_rank_name is not None:
             try:
@@ -135,44 +140,14 @@ class GraphNodeBase:
         else:
             children_options_list = []
         for child_options in children_options_list:
-            self.addChild(child_options)
+            self.add_child(child_options)
 
     def __repr__(self) -> str:
         return f"{self.rank_name(self.rank).upper()}_NODE: {self.ID}"
 
     @property
-    def rank(self) -> int:
-        """The rank index of the node."""
-        return self._RANK
-
-    @property
-    def leaf_rank(self) -> int:
-        return self._LEAF_RANK()
-
-    @property
-    def root(self) -> GraphNodeBase:
-        """Returns the highest-rank parent node."""
-        return self.parent_of_rank(0)
-
-    @property
-    def leafs(self) -> tuple[GraphNodeBase]:
-        """The lowest-rank child nodes that originate from this node."""
-        if self.IS_LEAF():
-            return (self,)
-
-        leafs_tuple = ()
-        for child in self.children:
-            leafs_tuple += child.leafs
-        return leafs_tuple
-
-    @property
-    def num_children(self):
-        """The number of children of this node."""
-        return len(self.children)
-
-    @property
-    def options(self):
-        return GraphNodeOptions(self)
+    def children(self):
+        return self._children
 
     @property
     def external_options(self) -> dict:
@@ -185,8 +160,28 @@ class GraphNodeBase:
             return self.parent.external_options
 
     @property
+    def leafs(self) -> tuple[GraphNodeBase]:
+        """The lowest-rank child nodes that originate from this node."""
+        if self.isleaf:
+            return (self,)
+
+        leafs_tuple = ()
+        for child in self.children:
+            leafs_tuple += child.leafs
+        return leafs_tuple
+
+    @property
+    def leaf_rank(self) -> int:
+        return self._LEAF_RANK()
+
+    @property
+    def ID(self):
+        return self._ID
+
+    @property
     def map(self) -> dict[GraphNodeID, GraphNodeBase]:
-        """Returns a dictionary, containing the {ID: Node} pairs of the node
+        """
+        Returns a dictionary, containing the {ID: Node} pairs of the node
         and all lower-rank nodes of the branch.
         """
         result = {}
@@ -198,73 +193,47 @@ class GraphNodeBase:
         result.update(children_map)
         return result
 
-    def addChild(self, options=None):
-        """Adds a child node with given options.
-        If options is None, creates empty child node.
+    @property
+    def num_children(self):
+        """The number of children of this node."""
+        return len(self.children)
+
+    @property
+    def options(self):
+        return GraphNodeOptions(self)
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @property
+    def rank(self) -> int:
+        """The rank index of the node."""
+        return self._RANK
+
+    @property
+    def root(self) -> GraphNodeBase:
+        """Returns the highest-rank parent node."""
+        return self.parent_of_rank(0)
+
+    def add_child(self, options=None):
+        """
+        Adds a child node with given options. If options is None, creates empty
+        child node.
         """
         if options is None:
             options = {}
-        self.children += (self._CHILD_CLASS(self, options),)
+        self._children += (self._CHILD_CLASS(self, options),)
         return
 
-    def emptyChildren(self):
+    def clear_children(self):
         """Sets 'children' attribute to empty tuple."""
-        self.children = ()
+        self._children = ()
 
-    def nth_parent(self, n) -> GraphNodeBase:
-        """Returns the nth parent of the Node."""
-        if n > self.rank:
-            raise ValueError
-        parent = self
-        while parent.rank > self.rank - n:
-            parent = parent.parent
-        return parent
-
-    def parent_of_rank(self, n) -> GraphNodeBase:
-        """Returns the parent with specified rank."""
-        return self.nth_parent(self.rank - n)
-
-    def previous(self, _i=0) -> GraphNodeBase:
-        """The previous node, the immediate sibling to the left.
-        Parameter '_i' is for internal use.
+    def get_option(self, key: str, _rank_name: str = None, _evo=False):
         """
-        if self.ID.local > 0:
-            if _i == 0:
-                return self.parent.children[self.ID.local - 1]
-            else:
-                result: GraphNodeBase = self.parent.children[
-                    self.ID.local - 1]
-                while _i > 0:
-                    _i -= 1
-                    result = result.children[-1]
-                return result
-        elif self.rank > 0:
-            return self.parent.previous(_i + 1)
-        else:
-            return GraphNodeNONE()
-
-    def next(self, _i=0) -> GraphNodeBase:
-        """The next node, the immediate sibling to the right.
-        Parameter '_i' is for internal use.
-        """
-        if self.ID.local < len(self.parent.children) - 1:
-            if _i == 0:
-                return self.parent.children[self.ID.local + 1]
-            else:
-                result: GraphNodeBase = self.parent.children[
-                    self.ID.local + 1]
-                while _i > 0:
-                    _i -= 1
-                    result = result.children[0]
-                return result
-        elif self.rank > 0:
-            return self.parent.next(_i + 1)
-        else:
-            return GraphNodeNONE()
-
-    def getOption(self, key: str, _rank_name: str = None, _evo=False):
-        """Looks for options with specified key in 'self._options'.
-        If self.options does not contain the key, looks for the key in
+        Looks for options with specified key in 'self._options'. If
+        self.options does not contain the key, looks for the key in
         the parent node's attribute 'global_options'.
         """
         try:
@@ -281,11 +250,69 @@ class GraphNodeBase:
             if isinstance(self.parent, GraphNodeNONE):
                 raise KeyError
             elif _rank_name is None:
-                return self.parent.getOption(
+                return self.parent.get_option(
                     key, _rank_name=self.rank_name(self.rank), _evo=_evo)
             else:
-                return self.parent.getOption(key, _rank_name=_rank_name,
-                                             _evo=_evo)
+                return self.parent.get_option(key, _rank_name=_rank_name,
+                                              _evo=_evo)
+
+    def get_parent(self, n: int = 1) -> GraphNodeBase:
+        """
+        Returns n-th parent node, default is n=1 corresponding to the direct
+        parent.
+        """
+        if n > self.rank:
+            raise ValueError("n cannot be greater than rank.")
+        if n == 1:
+            return self._parent
+        parent = self
+        while parent.rank > self.rank - n:
+            parent = parent._parent
+        return parent
+
+    def next(self, _i=0) -> GraphNodeBase:
+        """
+        The next node, the immediate sibling to the right. Parameter '_i' is
+        for internal use.
+        """
+        if self.ID.local < len(self.parent.children) - 1:
+            if _i == 0:
+                return self.parent.children[self.ID.local + 1]
+            else:
+                result: GraphNodeBase = self.parent.children[
+                    self.ID.local + 1]
+                while _i > 0:
+                    _i -= 1
+                    result = result.children[0]
+                return result
+        elif self.rank > 0:
+            return self.parent.next(_i + 1)
+        else:
+            return GraphNodeNONE()
+
+    def parent_of_rank(self, n) -> GraphNodeBase:
+        """Returns the parent with specified rank."""
+        return self.get_parent(self.rank - n)
+
+    def previous(self, _i=0) -> GraphNodeBase:
+        """
+        The previous node, the immediate sibling to the left. Parameter '_i'
+        is for internal use.
+        """
+        if self.ID.local > 0:
+            if _i == 0:
+                return self.parent.children[self.ID.local - 1]
+            else:
+                result: GraphNodeBase = self.parent.children[
+                    self.ID.local - 1]
+                while _i > 0:
+                    _i -= 1
+                    result = result.children[-1]
+                return result
+        elif self.rank > 0:
+            return self.parent.previous(_i + 1)
+        else:
+            return GraphNodeNONE()
 
 
 @dataclass(frozen=True)
@@ -303,9 +330,10 @@ class GraphNodeNONE:
 
 
 class GraphNodeOptions(UserDict):
-    """Dictionary-like class that automatically infers option key from parent
-    nodes if it is not found. However, setting and deleting options acts only
-    on the local node.
+    """
+    Dictionary-like class that automatically infers option from parent
+    nodes if it is not found in current node. However, setting and deleting
+    options acts only on the current node.
     """
     def __init__(self, node: GraphNodeBase):
         self._node = node
@@ -317,14 +345,14 @@ class GraphNodeOptions(UserDict):
         except KeyError:
             pass
         try:
-            evolution = self._node.getOption("evolution")
+            evolution = self._node.get_option("evolution")
         except KeyError:
             evolution = False
 
         if evolution:
-            return self._node.getOption(__key, _evo=True)
+            return self._node.get_option(__key, _evo=True)
         else:
-            return self._node.getOption(__key)
+            return self._node.get_option(__key)
 
     def __setitem__(self, __key: str, __value) -> None:
         return self._node._options.__setitem__(__key, __value)

@@ -31,7 +31,10 @@ def _fetch(name: str):
 
 
 class RoutineFunction:
-    """Thin class for functions with consistent signature"""
+    """
+    Class for functions with consistent signature to be used as callables
+    in routines.
+    """
     @classmethod
     def fromFunctionName(cls, function_name):
         return cls(_fetch(function_name))
@@ -51,14 +54,6 @@ class RoutineFunction:
         return {key: param for key, param in
                 signature(self._function).parameters.items() if param.kind
                 == kind}
-
-    @property
-    def signature(self):
-        return signature(self._function)
-
-    @property
-    def positional_args(self) -> dict:
-        return self._params_of_kind(Parameter.POSITIONAL_ONLY)
 
     @property
     def mandatory_args(self) -> dict:
@@ -86,6 +81,14 @@ class RoutineFunction:
                 result[key] = param
         return result
 
+    @property
+    def positional_args(self) -> dict:
+        return self._params_of_kind(Parameter.POSITIONAL_ONLY)
+
+    @property
+    def signature(self):
+        return signature(self._function)
+
 
 class RoutineABC(ABC):
     _ROUTINE_MANDATORY_KEYS: tuple[str]
@@ -106,7 +109,7 @@ class RoutineABC(ABC):
             try:
                 option = self._node.options[key]
             except KeyError:
-                option = self._protocol.getOptions(key)
+                option = self._protocol.get_options(key)
             self.options[key] = option
         for key in self._ROUTINE_OPTIONAL_KEYS.keys():
             try:
@@ -124,11 +127,11 @@ class RoutineABC(ABC):
     def store_token(self):
         pass
 
-    def enableLiveTracking(self):
-        self.live_tracking = True
-
-    def disableLiveTracking(self):
+    def disable_live_tracking(self):
         self.live_tracking = False
+
+    def enable_live_tracking(self):
+        self.live_tracking = True
 
 
 class RegularRoutine(RoutineABC):
@@ -149,6 +152,16 @@ class RegularRoutine(RoutineABC):
             self._TYPE = node._options["TYPE"]
         self._rfunction = RoutineFunction.fromFunctionName(self.name)
         self._rfunction_partial = self._make_rfunction_partial()
+
+    def __call__(self, tstate: TimedState):
+        result = self._rfunction_partial(tstate.psi)
+        if self._rfunction.overwrite_psi:
+            tstate.psi = result
+        if not self.options["output"]:
+            return
+        if result is not None:
+            return (self.store_token, result)
+        return
 
     @property
     def kwargs(self) -> dict:
@@ -205,16 +218,6 @@ class RegularRoutine(RoutineABC):
             return lambda psi: self._rfunction(psi, *bound_arguments.args,
                                                **bound_arguments.kwargs)
 
-    def __call__(self, tstate: TimedState):
-        result = self._rfunction_partial(tstate.psi)
-        if self._rfunction.overwrite_psi:
-            tstate.psi = result
-        if not self.options["output"]:
-            return
-        if result is not None:
-            return (self.store_token, result)
-        return
-
 
 class PropagationRoutine(RoutineABC):
     """Class for time propagation steps of the state."""
@@ -227,10 +230,10 @@ class PropagationRoutine(RoutineABC):
         assert self.name == "PROPAGATE"
         self.timestep = self.options["step"]
 
-    @property
-    def store_token(self):
-        return "PROPAGATE"
-
     def __call__(self, tstate: TimedState):
         tstate.propagate(self.timestep)
         return
+
+    @property
+    def store_token(self):
+        return "PROPAGATE"

@@ -34,19 +34,19 @@ class ProtocolConfiguration(UserDict):
         return global_options
 
     @property
-    def schedules(self):
-        return self["schedules"]
-
-    @schedules.setter
-    def schedules(self, input):
-        self["schedules"] = input
-        return
-
-    @property
     def global_schedule_options(self):
         return self["global_schedule_options"]
 
     @global_schedule_options.setter
     def global_schedule_options(self, input):
         self["global_schedule_options"] = input
+        return
+
+    @property
+    def schedules(self):
+        return self["schedules"]
+
+    @schedules.setter
+    def schedules(self, input):
+        self["schedules"] = input
         return

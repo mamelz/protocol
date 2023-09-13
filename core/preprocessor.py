@@ -79,7 +79,7 @@ class SchedulePreprocessor(PreprocessorABC):
     def run(self):
         start_time = self._start_time
         for preproc in self._stage_preprocessors:
-            preproc.setStartTime(start_time)
+            preproc.set_start_time(start_time)
             start_time = preproc.run()
         return
 
@@ -90,7 +90,7 @@ class StagePreprocessor(PreprocessorABC):
     """
     @classmethod
     def check_node_empty(cls, node: GraphNodeBase):
-        if node.IS_LEAF():
+        if node.isleaf:
             return node._options == {}
         if node.num_children == 0:
             return True
@@ -103,7 +103,7 @@ class StagePreprocessor(PreprocessorABC):
         self._stage = stage
         self._start_time = None
 
-    def setStartTime(self, time: float):
+    def set_start_time(self, time: float):
         self._start_time = time
 
     def run(self) -> float:
@@ -211,7 +211,7 @@ class StagePreprocessor(PreprocessorABC):
         # if stage configuration contained no tasks, add empty task to create
         # routines
         if self._stage.num_children == 0:
-            self._stage.addChild()
+            self._stage.add_child()
             last_task_id = self._stage.children[-1].ID
             new_routines_dict = {last_task_id: ()}
             for time in timesteps_arr:
@@ -231,12 +231,12 @@ class StagePreprocessor(PreprocessorABC):
                 prior_time = time
 
         for task in self._stage.children:
-            task.emptyChildren()
+            task.clear_children()
             for new_child in new_routines_dict[task.ID]:
-                task.addChild(new_child)
+                task.add_child(new_child)
 
         # at end of time evolution, always return state
-        self._stage.children[-1].addChild({"name": "psi",
-                                           "store_token": "LAST_PSI",
-                                           "TYPE": "AUTOMATIC"})
+        self._stage.children[-1].add_child({"name": "psi",
+                                            "store_token": "LAST_PSI",
+                                            "TYPE": "AUTOMATIC"})
         return stage_stop_time
