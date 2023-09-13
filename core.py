@@ -8,10 +8,10 @@ import sys
 import textwrap
 from typing import Any, Sequence, Union
 
-from ..parser_ import ProtocolConfiguration
-from ..routines import RoutineABC, PropagationRoutine
-from ..settings import SETTINGS
-from ..utils import FrozenDict
+from .parser_ import ProtocolConfiguration
+from .routines import RoutineABC, PropagationRoutine
+from .settings import SETTINGS
+from .utils import FrozenDict
 
 from .preprocessor import ProtocolPreprocessor
 from .protocolgraph import ProtocolGraph

@@ -2,8 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..core import Protocol, ProtocolGraph
-    from ..graph import GraphNodeBase
+    from .core import Protocol, ProtocolGraph
+    from .graph import GraphNodeBase
 
 from abc import ABC, abstractmethod
 import numpy as np

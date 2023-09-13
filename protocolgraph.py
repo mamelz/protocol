@@ -5,16 +5,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from numpy import ndarray
-    from ..core import Protocol
-    from ..graph import GraphNodeBase
-    from ..interface import TimedState
-    from ..routines import RoutineABC
+    from .core import Protocol
+    from .graph import GraphNodeBase
+    from .interface import TimedState
+    from .routines import RoutineABC
 
 from typing import Any
 
-from ..graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
-from ..interface import UserTState
-from ..routines import PropagationRoutine, RegularRoutine
+from .graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
+from .interface import UserTState
+from .routines import PropagationRoutine, RegularRoutine
 
 
 class ProtocolGraph:
