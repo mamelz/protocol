@@ -224,19 +224,6 @@ class GraphNodeBase:
         """Returns the parent with specified rank."""
         return self.nth_parent(self.rank - n)
 
-# TODO
-#    def _leafs(self, _leafs=()):
-#        if self.IS_LEAF():
-#            return (self,)
-#        for child in self.children:
-#            _leafs += child._leafs(_leafs)
-#        return _leafs
-#
-#    @property
-#    def leafs(self) -> tuple[GraphNodeBase]:
-#        """The lowest-rank child nodes that originate from this node."""
-#        return self._leafs()
-
     def previous(self, _i=0) -> GraphNodeBase:
         """The previous node, the immediate sibling to the left.
         Parameter '_i' is for internal use.
