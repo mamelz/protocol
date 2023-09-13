@@ -10,7 +10,8 @@ import numpy as np
 
 
 class PreprocessorABC(ABC):
-    """Abstract base class for Preprocessors. They process options
+    """
+    Abstract base class for Preprocessors. They process options
     of the given objects, modifying them if needed.
     """
     @abstractmethod
@@ -85,7 +86,8 @@ class SchedulePreprocessor(PreprocessorABC):
 
 
 class StagePreprocessor(PreprocessorABC):
-    """Class for preprocessing a stage. In evolution stages, monitoring and
+    """
+    Class for preprocessing a stage. In evolution stages, monitoring and
     propagation routines will automatically be created.
     """
     @classmethod
@@ -107,7 +109,8 @@ class StagePreprocessor(PreprocessorABC):
         self._start_time = time
 
     def run(self) -> float:
-        """Configures stage options for time evolution, if necessary.
+        """
+        Configures stage options for time evolution, if necessary.
         Returns the time of the last timestep of the stage, returns the
         start time if the stage is not an evolution stage.
         """
