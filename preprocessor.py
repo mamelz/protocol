@@ -107,12 +107,13 @@ class StagePreprocessor(PreprocessorABC):
 
     def _process_evolution(self):
         propagation_time = self._stage.options["propagation_time"]
-        if all(key in self._stage.options for key in ("monitoring_stepsize",
-                                                      "monitoring_numsteps")):
-            raise ValueError("Only one of 'monitoring_stepsize' and"
-                             "'monitoring_numsteps' can be specified.")
 
-        if all(key not in self._stage.options for key in
+        if all(key in self._stage._options for key in
+               ("monitoring_stepsize", "monitoring_numsteps")):
+            raise ValueError("Only one of 'monitoring_stepsize' and"
+                             " 'monitoring_numsteps' can be specified.")
+
+        if all(key not in self._stage._options for key in
                ("monitoring_stepsize", "monitoring_numsteps")):
             raise ValueError("One of 'monitoring_stepsize' and"
                              "'monitoring_numsteps' must be specified.")
