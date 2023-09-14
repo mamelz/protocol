@@ -105,32 +105,29 @@ class StagePreprocessor(PreprocessorABC):
         self._stage = stage
         self._start_time = None
 
-    def set_start_time(self, time: float):
-        self._start_time = time
+    def _process_evolution(self):
+        propagation_time = self._stage.options["propagation_time"]
+        if all(key in self._stage.options for key in ("monitoring_stepsize",
+                                                      "monitoring_numsteps")):
+            raise ValueError("Only one of 'monitoring_stepsize' and"
+                             "'monitoring_numsteps' can be specified.")
 
-    def run(self) -> float:
-        """
-        Configures stage options for time evolution, if necessary.
-        Returns the time of the last timestep of the stage, returns the
-        start time if the stage is not an evolution stage.
-        """
-        if self._start_time is None:
-            raise ValueError("Stage start time must be set, first.")
-
-        for routine in self._stage.leafs:
-            routine._options["TYPE"] = "USER"
+        if all(key not in self._stage.options for key in
+               ("monitoring_stepsize", "monitoring_numsteps")):
+            raise ValueError("One of 'monitoring_stepsize' and"
+                             "'monitoring_numsteps' must be specified.")
 
         try:
-            evolution = self._stage.options["evolution"]
+            propagation_stepsize = self._stage.options["monitoring_stepsize"]
+            propagation_numsteps = int(propagation_time //
+                                       propagation_stepsize) + 1
         except KeyError:
-            evolution = False
-        if not evolution:
-            return self._start_time
+            pass
+        try:
+            propagation_numsteps = self._stage.options["monitoring_numsteps"]
+        except KeyError:
+            pass
 
-        propagation_time = self._stage.options["propagation_time"]
-        propagation_stepsize = self._stage.options["monitoring_stepsize"]
-        propagation_numsteps =\
-            int(propagation_time // propagation_stepsize) + 1
         stage_stop_time = self._start_time + propagation_time
 
         try:
@@ -243,3 +240,30 @@ class StagePreprocessor(PreprocessorABC):
                                             "store_token": "LAST_PSI",
                                             "TYPE": "AUTOMATIC"})
         return stage_stop_time
+
+    # TODO
+    def _process_sweep(self):
+        raise NotImplementedError
+
+    def set_start_time(self, time: float):
+        self._start_time = time
+
+    def run(self) -> float:
+        """
+        Configures stage options for time evolution, if necessary.
+        Returns the time of the last timestep of the stage, returns the
+        start time if the stage is not an evolution stage.
+        """
+        if self._start_time is None:
+            raise ValueError("Stage start time must be set, first.")
+
+        for routine in self._stage.leafs:
+            routine._options["TYPE"] = "USER"
+
+        if self._stage.options["type"] == "evolution":
+            return self._process_evolution()
+
+        elif self._stage.options["type"] == "sweep":
+            return self._process_sweep()
+
+        return self._start_time
