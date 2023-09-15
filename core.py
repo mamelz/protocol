@@ -6,70 +6,92 @@ if TYPE_CHECKING:
 
 import sys
 import textwrap
-from typing import Any, Sequence, Union
+from typing import Any, Union
 
 from .parser_ import ProtocolConfiguration
+from .preprocessor import ProtocolPreprocessor
+from .protocolgraph import ProtocolGraph
 from .routines import RoutineABC, PropagationRoutine
 from .settings import SETTINGS
 from .utils import FrozenDict
 
-from .preprocessor import ProtocolPreprocessor
-from .protocolgraph import ProtocolGraph
-
 
 class Protocol:
+    """The main object of the package, representing a collection of schedules.
+
+    The protocol contains all schedules to be executed. Schedules can be
+    initialized by constructing the protocol from a yaml configuration file or
+    they can be added to an already existing protocol.
+    Upon execution of the protocol, the outputs of all routines, depending on
+    configuration, are stored and can be retrieved with the `get_results()`
+    method.
     """
-    Main object containing all necessary information for performing
-    the calculations on a quantum state.
-    """
+
     _RANK_NAMES = ("Schedule", "Stage", "Task", "Routine")
 
-    def __init__(self, configuration: ProtocolConfiguration = None):
+    def __init__(self, config_yaml_path: str = None):
+        """Construct new protocol from configuration file.
+
+        If no configuration file is given, construct empty protocol.
+
+        Args:
+            config_yaml_path (str, optional): Path to configuration file.
+                                              Defaults to None.
         """
-        If 'configuration' is None, initializes empty protocol.
-        Schedules and global options can be added later on.
-        """
-        self._config = configuration
+
+        if config_yaml_path is not None:
+            self._config = ProtocolConfiguration(config_yaml_path)
+        else:
+            self._config = None
+
         self._graphs: tuple[ProtocolGraph] = ()
         self._label_map: dict[str, int] = {}
         if self._config is not None:
             for options in self._config.schedules:
                 self._graphs += (ProtocolGraph(self, options),)
-        self.live_tracking = ()
-        self.results: dict[Union[float, str], dict[float, dict[str, Any]]] = {}
+        self._live_tracking = ()
+        self._results = {}
         self._initialized = False
         self._finalized = False
         self._graphs_performed: tuple[float] = ()
 
     @property
     def global_options(self) -> dict:
+        """Return the global options of the protocol.
+
+        Returns:
+            dict: Dictionary containing all keys found, except for 'schedules'.
+        """
         res = {}
         for key in self._config:
             if key != "schedules":
                 res[key] = self._config[key]
-#            if key == "global_schedule_options":
-#                res["graph"] = self._options[key]
-#                del res["global_schedule_options"]
+
         return res
 
     @property
     def num_schedules(self):
-        """The number of schedules currently initialized."""
+        """Return the number of schedules registered in the protocol."""
         return len(self._graphs)
 
     @property
     def schedule_options(self) -> list[dict]:
-        # assert len(self._options["schedules"]) == 1
+        """Return a list containing the options of all schedules."""
         return self._config["schedules"]
 
     def _preprocessor(self, _start_time=None):
         return ProtocolPreprocessor(self, _start_time)
 
-    def _perform_n(self, n: int):
-        if isinstance(self.results, FrozenDict):
-            self.results = dict(self.results)
+    def _perform_n(self, id):
+        if isinstance(self._results, FrozenDict):
+            self._results = dict(self._results)
 
-        graph: ProtocolGraph = self._graphs[n]
+        graph: ProtocolGraph = self.get_schedule(id)
+        if isinstance(id, str):
+            schedule_idx = self._label_map[id]
+        else:
+            schedule_idx = id
+
         num_stages = len(graph.get_rank(1))
         assert isinstance(graph, ProtocolGraph)
         for i, routine in enumerate(graph.ROUTINES):
@@ -82,7 +104,7 @@ class Protocol:
             else:
                 name_string = (f"{routine._TYPE:>10}"
                                f" {routine.store_token:<20}")
-            schedule_name = n + 1 if graph.label is None else (
+            schedule_name = schedule_idx + 1 if graph.label is None else (
                 f"'{graph.label}'")
             text_prefix = " | ".join([
                 f"SCHEDULE {schedule_name:>6}:",
@@ -110,17 +132,25 @@ class Protocol:
                 graph.RESULTS[output[0]].update({graph.tstate.time: output[1]})
 
         if graph.label is not None:
-            self.results[graph.label] = graph.RESULTS
-        self.results[n] = graph.RESULTS
-        self.results = FrozenDict(self.results)
-        self._graphs_performed += (n,)
+            self._results[graph.label] = graph.RESULTS
+        self._results[schedule_idx] = graph.RESULTS
+        self._results = FrozenDict(self._results)
+        self._graphs_performed += (schedule_idx,)
         return
 
-    def add_schedule(self, graph_options, **tstate_args):
+    def add_schedule(self, schedule_options: dict, **tstate_args):
+        """Add a schedule to the protocol, configured by `schedule_options`.
+
+        Optionally, initialize the timed state of the schedule.
+
+        Args:
+            schedule_options (dict): The options of the schedule.
+
+        Raises:
+            ValueError: Raised when `schedule_options` specify label which is
+                        already used by another schedule.
         """
-        Adds a schedule to the protocol, optionally setting the tstate aswell.
-        """
-        graph = ProtocolGraph(self, graph_options)
+        graph = ProtocolGraph(self, schedule_options)
         if tstate_args is not None:
             graph.init_tstate(**tstate_args)
         self._graphs += (graph,)
@@ -130,103 +160,154 @@ class Protocol:
             self._label_map[graph.label] = len(self._graphs) - 1
         return
 
-    def duplicate_schedule(self, id, **tstate_args):
+    def duplicate_schedule(self, schedule_id: Union[str, int], **tstate_args):
+        """Duplicate a schedule identified by `schedule_id`.
+
+        Args:
+            schedule_id (Union[str, int]): The label or index of an already
+                                           registered schedule.
         """
-        Adds a schedule to the protocol, using the options of some schedule
-        already contained in the protocol.
-        """
-        self.add_schedule(self.schedule(id).root._options, **tstate_args)
+        self.add_schedule(self.get_schedule(id).root._options, **tstate_args)
         return
 
     def finalize(self):
+        """Finalize the protocol, making it ready for execution.
+
+        Raises:
+            ValueError: Raised, if protocol is not initialized.
+        """
         if not self._initialized:
             raise ValueError("Protocol must be initialized, first.")
 
         for graph in self._graphs:
             graph.make_routines()
             for routine in graph.ROUTINES:
-                if routine.store_token in self.live_tracking:
+                if routine.store_token in self._live_tracking:
                     routine.enable_live_tracking()
         self._finalized = True
 
-    def get_options(self, key):
+    def get_options(self, key: str):
+        """Return value of global option `key`.
+
+        Args:
+            key (str): The name of the global option to return.
+
+        Returns:
+            Any: The value of the option.
+        """
         return self.global_options[key]
 
-    def get_output(self, quantities: Sequence = (), graph_id=None)\
-            -> dict[str, dict[str, dict[float, Any]]]:
-        """
-        Returns the time-resolved sequence of measurements of the
-        specified quantities. If no graph is specified, returns a dictionary
-        with outputs of all graphs, using the graph number or (if available)
-        graph labels as keys.
-        If no measurement name is specified, the dictionary contains all
-        available results.
-        """
-        if isinstance(quantities, str):
-            quantities = (quantities,)
+    def get_results(self, quantities: tuple = (), schedule_id=None)\
+            -> FrozenDict[str, dict[str, dict[float, Any]]]:
+        """Return results after execution of the protocol.
 
+        Return the time-resolved outputs of routines of a schedule that
+        were performed during execution.
+        If no schedule is specified, return a dictionary containing all
+        schedules by index or label, if available.
+        Quantities can be addressed by their store token, if set up
+        in the protocol configuration.
+        If no quantity is specified, the dictionary contains all
+        calculated quantities for each schedule.
+
+        Args:
+            quantities (Sequence[str]): Sequence of names of routine outputs.
+            schedule_id (tuple): Tuple of labels and/or indices of schedules.
+
+        Returns:
+            FrozenDict[str, dict[str, dict[float, Any]]]:
+                Immutable dictionary-like object, containing the desired
+                outputs. The first key specifies the schedule, the second key
+                specifies the time corresponding to the outputs.
+        """
         output_dict = {}
-        if graph_id is None:
+        if schedule_id is None:
             graphs = self._graphs_performed
         else:
-            graphs = (graph_id,)
+            graphs = tuple(schedule_id)
 
         for identifier in graphs:
-            key = self.schedule(identifier).label
+            key = self.get_schedule(identifier).label
             if key is None:
                 key = identifier
             output_dict[key] = {}
 
-        if graph_id is not None and (
-                graph_id not in output_dict):
+        if schedule_id is not None and (
+                schedule_id not in output_dict):
             assert len(output_dict.values()) == 0
-            output_dict[graph_id] = output_dict.values()[0]
+            output_dict[schedule_id] = output_dict.values()[0]
 
         if quantities == ():
             for graph_idt in output_dict.keys():
-                output_dict[graph_idt] = self.schedule(graph_idt).RESULTS
+                output_dict[graph_idt] = self.get_schedule(graph_idt).RESULTS
         else:
             for graph_idt in output_dict.keys():
                 for qname in quantities:
-                    output_dict[graph_idt][qname] = self.schedule(
+                    output_dict[graph_idt][qname] = self.get_schedule(
                         graph_idt).RESULTS[qname]
         return FrozenDict(output_dict)
 
-    def initialize(self, _start_time=None):
-        """
-        Initialize protocol, optionally forcing a start time for all graphs.
+    def initialize(self, force_start_time: float = None):
+        """Initialize protocol after at least one schedule was added.
+
+        Optionally, force a start time for all schedules.
+        Also checks if all library settings have been set.
+
+        Args:
+            force_start_time (float, optional): The start time to force for all
+                                                schedules. Defaults to None.
+
+        Raises:
+            ValueError: Raised, if a library setting is missing.
+            ValueError: Raised, if no schedules are set.
+            ValueError: Raised, if a schedule is not initialized with a
+                        timed state.
         """
         if not SETTINGS.check():
             raise ValueError("Library settings not complete.")
         if len(self._graphs) == 0:
-            raise ValueError("Protocol does not contain any graphs.")
+            raise ValueError("Protocol does not contain any schedules.")
         for i in range(len(self._graphs)):
             graph = self._graphs[i]
             id = f"'{graph.label}'" if graph.label is None else i
             if graph.tstate is None:
                 raise ValueError(f"TState of schedule {id} not set.")
 
-        self._preprocessor(_start_time=_start_time).run()
+        self._preprocessor(_start_time=force_start_time).run()
         self._initialized = True
         return
 
-    def perform(self, n=None):
-        """
-        Performs schedule n. If no argument is passed, performs all schedules.
+    def perform(self, schedule_id=None):
+        """Perform all schedules. Optionally, perform a specified schedule.
+
+        Args:
+            schedule_id (str | int, optional): Identifier for schedule.
+                                               Defaults to None.
+
+        Raises:
+            ValueError: Raised, if the protocol was not ready for execution.
         """
         if not self._finalized:
             raise ValueError("Protocol must be finalized, first.")
 
-        if n is None:
+        if schedule_id is None:
             for i in range(self.num_schedules):
                 self._perform_n(i)
         else:
-            self._perform_n(n)
+            self._perform_n(schedule_id)
         return
 
-    def schedule(self, identifier: Union[int, str]) -> ProtocolGraph:
-        """
-        Returns schedule, either with specified number or specified label.
+    def get_schedule(self, identifier: Union[int, str]) -> ProtocolGraph:
+        """Return schedule, either with specified number or specified label.
+
+        Args:
+            identifier (Union[int, str]): Schedule identifier.
+
+        Raises:
+            TypeError: Raised, if identifier is of wrong type.
+
+        Returns:
+            ProtocolGraph: A schedule of the protocol.
         """
         if isinstance(identifier, int):
             return self._graphs[identifier]
@@ -235,30 +316,50 @@ class Protocol:
         raise TypeError("Invalid identifier type.")
 
     def set_global_options(self, config: dict):
-        if not isinstance(config, dict):
-            raise ValueError
+        """Set global options of the protocol.
+
+        Args:
+            config (dict): Dictionary containing options to set.
+
+        Raises:
+            ValueError: Raised, if options contain the keyword 'schedules'.
+        """
         if "schedules" in config:
             raise ValueError("Global options cannot contain key 'schedules'.")
         self._config.update(config)
         return
 
     def set_live_tracking(self, names: Union[str, tuple[str]]):
-        """
-        Specifies functions, the output of which shall be printed during
-        calculation.
+        """Enable live tracking for the routines specified by `names`.
+
+        All routines with the specified names will print their result in the
+        output stream during execution of the protocol. Routines can be
+        specified by their name or store token.
+
+        Args:
+            names (Union[str, tuple[str]]): The names of the routines to be
+                                            live-tracked.
         """
         if isinstance(names, str):
             names = (names,)
-        self.live_tracking = names
+        self._live_tracking = names
         return
 
     def set_tstate(self, schedule_id: Union[int, str], state: ndarray,
                    propagator_factory, label=None):
+        """Set up the time-dependent state of a schedule.
+
+        This method sets the initial state of the schedule. Furthermore,
+        a factory method is passed that generates the propagator for the state.
+
+        Args:
+            schedule_id (Union[int, str]): Schedule identifier.
+            state (ndarray): The initial state for this schedule.
+            propagator_factory (_type_): Factory method that generates an
+                implementation of the `Propagator` interface.
+            label (_type_, optional): Label of the state. Defaults to None.
         """
-        Sets the time-dependent state of the specified schedule.
-        The schedule can be specified by label or number.
-        """
-        schedule = self.schedule(schedule_id)
+        schedule = self.get_schedule(schedule_id)
         schedule.init_tstate(state, propagator_factory, label)
         if schedule.label is not None:
             self._label_map[schedule.label] = self._graphs.index(schedule)
