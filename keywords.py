@@ -4,30 +4,42 @@ data types or possible entries.
 """
 
 
-SCHEDULE_KEYWORDS = {
-    "global_options": dict,
-    "start_time": float,
+SCHEDULE_KEYWORDS_MANDATORY = {
     "stages": list,
+    "start_time": float
 }
 
-STAGE_KEYWORDS = {
+SCHEDULE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
-    "type": ("evolution", "sweep", "default"),
-    "propagation_time": float,
-    "monitoring_stepsize": float,
-    "monitoring": list,
+}
+
+STAGE_KEYWORDS_MANDATORY = {
     "tasks": list
 }
 
-TASK_KEYWORDS = {
+STAGE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
+    "monitoring": list,
+    "monitoring_stepsize": float,
+    "propagation_time": float,
+    "type": ("evolution", "sweep", "default"),
+}
+
+TASK_KEYWORDS_MANDATORY = {
     "routines": list
 }
 
-ROUTINE_KEYWORDS = {
-    "name": str,
-    "time": float,
+TASK_KEYWORDS_OPTIONAL = {
+    "global_options": dict
+}
+
+ROUTINE_KEYWORDS_MANDATORY = {
     "kwargs": dict,
+    "name": str
+}
+
+ROUTINE_KEYWORDS_OPTIONAL = {
     "output": bool,
-    "store_token": str
+    "store_token": str,
+    "time": float
 }
