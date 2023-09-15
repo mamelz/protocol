@@ -4,20 +4,20 @@ data types or possible entries.
 """
 
 
-SCHEDULE_KEYWORDS_MANDATORY = {
+_SCHEDULE_KEYWORDS_MANDATORY = {
     "stages": list,
     "start_time": float
 }
 
-SCHEDULE_KEYWORDS_OPTIONAL = {
+_SCHEDULE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
 }
 
-STAGE_KEYWORDS_MANDATORY = {
+_STAGE_KEYWORDS_MANDATORY = {
     "tasks": list
 }
 
-STAGE_KEYWORDS_OPTIONAL = {
+_STAGE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
     "monitoring": list,
     "monitoring_stepsize": float,
@@ -26,21 +26,40 @@ STAGE_KEYWORDS_OPTIONAL = {
     "type": ("evolution", "sweep", "default"),
 }
 
-TASK_KEYWORDS_MANDATORY = {
+_TASK_KEYWORDS_MANDATORY = {
     "routines": list
 }
 
-TASK_KEYWORDS_OPTIONAL = {
+_TASK_KEYWORDS_OPTIONAL = {
     "global_options": dict
 }
 
-ROUTINE_KEYWORDS_MANDATORY = {
+_ROUTINE_KEYWORDS_MANDATORY = {
     "kwargs": dict,
     "name": str
 }
 
-ROUTINE_KEYWORDS_OPTIONAL = {
+_ROUTINE_KEYWORDS_OPTIONAL = {
     "output": bool,
     "store_token": str,
     "time": float
+}
+
+KEYWORDS = {
+    "schedule": {
+        "mandatory": _SCHEDULE_KEYWORDS_MANDATORY,
+        "optional": _SCHEDULE_KEYWORDS_OPTIONAL
+    },
+    "stage": {
+        "mandatory": _STAGE_KEYWORDS_MANDATORY,
+        "optional": _STAGE_KEYWORDS_OPTIONAL
+    },
+    "task": {
+        "mandatory": _TASK_KEYWORDS_MANDATORY,
+        "optional": _TASK_KEYWORDS_OPTIONAL
+    },
+    "routine": {
+        "mandatory": _ROUTINE_KEYWORDS_MANDATORY,
+        "optional": _ROUTINE_KEYWORDS_OPTIONAL
+    }
 }
