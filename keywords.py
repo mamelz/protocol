@@ -21,6 +21,7 @@ STAGE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
     "monitoring": list,
     "monitoring_stepsize": float,
+    "propagation_numsteps": int,
     "propagation_time": float,
     "type": ("evolution", "sweep", "default"),
 }
