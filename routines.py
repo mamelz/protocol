@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from typing import Callable
     from .core import Protocol
     from .graph import GraphNodeBase
-    from .interface import TimedState
+    from .interface import System
 
 from abc import ABC, abstractmethod
 import importlib.util
@@ -96,7 +96,7 @@ class RoutineABC(ABC):
     _ROUTINE_OPTIONAL_KEYS: dict[str]
 
     @abstractmethod
-    def __call__(self, tstate: TimedState):
+    def __call__(self, system: System):
         pass
 
     @abstractmethod
@@ -153,10 +153,10 @@ class RegularRoutine(RoutineABC):
         self._rfunction = RoutineFunction.fromFunctionName(self.name)
         self._rfunction_partial = self._make_rfunction_partial()
 
-    def __call__(self, tstate: TimedState):
-        result = self._rfunction_partial(tstate.psi)
+    def __call__(self, system: System):
+        result = self._rfunction_partial(system.psi)
         if self._rfunction.overwrite_psi:
-            tstate.psi = result
+            system.psi = result
         if not self.options["output"]:
             return
         if result is not None:
@@ -230,8 +230,8 @@ class PropagationRoutine(RoutineABC):
         assert self.name == "PROPAGATE"
         self.timestep = self.options["step"]
 
-    def __call__(self, tstate: TimedState):
-        tstate.propagate(self.timestep)
+    def __call__(self, system: System):
+        system.propagate(self.timestep)
         return
 
     @property

@@ -1,110 +1,105 @@
 """Module containing interfaces for the time-resolved state and propagator"""
 from __future__ import annotations
+
+import inspect
+
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-import numpy as np
-
-
-class _PropagatorFactory(ABC):
-    """Helper class for type checking propagator factory methods."""
-    @abstractmethod
-    def __call__(self, *args, **kwargs) -> Propagator:
-        pass
+from typing import Mapping, Any
 
 
 class Propagator(ABC):
     """Interface representing a propagator."""
-    _MANDATORY_ATTRIBUTES = ("__call__", "set_t0", "_psi")
 
     @classmethod
-    def register_object(cls, custom_object):
-        for att_key in cls._MANDATORY_ATTRIBUTES:
-            if not hasattr(custom_object, att_key):
-                raise TypeError("Object not compatible with interface.")
-        cls.register(type(custom_object))
-        return
+    def __subclasshook__(cls, __subclass: type) -> bool:
+        return (hasattr(__subclass, "propagate") and
+                callable(__subclass.propagate) and
+                hasattr(__subclass, "initialize_time") and
+                callable(__subclass.initialize_time) and
+                hasattr(__subclass, "time") and not
+                callable(__subclass.time))
 
     @abstractmethod
     def __init__(self):
-        self._psi = None
+        self.time: float = None
+        raise NotImplementedError
 
     @abstractmethod
-    def __call__(self, time: float, timestep: float) -> np.ndarray:
-        pass
+    def initialize_time(self, initial_time: float, initial_state) -> None:
+        """Initialize propagator with an initial time and initial state."""
+        raise NotImplementedError
 
     @abstractmethod
-    def set_t0(self):
-        pass
+    def propagate(self, state, timestep: float) -> Any:
+        """Propagate state by timestep and return state."""
+        raise NotImplementedError
 
 
-@dataclass
-class TimedState(ABC):
-    """Interface representing the time-resolved quantum state"""
-    time: float
-    psi: np.ndarray
-    label = None
+class System:
+    """Class representing the time-dependent quantum system.
 
-    @classmethod
-    def register_class(cls, custom_tstate_class):
-        if hasattr(custom_tstate_class, "time") and hasattr(
-                custom_tstate_class, "psi"):
-            if isinstance(custom_tstate_class.time, float) and isinstance(
-                    custom_tstate_class.psi, np.ndarray):
-                cls.register(custom_tstate_class)
-                return custom_tstate_class
-        raise TypeError
+    Each schedule is associated with exactly one time-dependent system. The
+    `System` object encapsulates all the information about the time evolution
+    of the system, i.e. at any system time, the quantum state and the
+    hamiltonian are known. It also provides the methods necessary to propagate
+    the system in time.
 
-    @classmethod
-    def register_object(cls, custom_tstate_object):
-        if hasattr(custom_tstate_object, "time") and hasattr(
-                custom_tstate_object, "psi"):
-            if isinstance(custom_tstate_object.time, float) and isinstance(
-                    custom_tstate_object.psi, np.ndarray):
-                cls.register(type(custom_tstate_object))
-                return custom_tstate_object
-        raise TypeError
+    """
 
-    @abstractmethod
-    def propagate(self, timestep) -> None:
-        pass
+    @staticmethod
+    def _validate_hamiltonian(hamiltonian):
+        """Check hamiltonian for correct signature, if callable."""
+        if not inspect.isfunction(hamiltonian):
+            return
 
-    @abstractmethod
-    def set_t0(self, t0):
-        pass
+        sig = inspect.signature(hamiltonian)
+        if len(sig.parameters.keys()) != 1:
+            raise TypeError("Callable hamiltonians must take"
+                            " exactly one argument.")
+        return
 
+    def __init__(self, initial_time: float, initial_state, hamiltonian,
+                 propagator: Propagator, label: str = None):
+        """Construct new physical system.
 
-class UserTState(TimedState):
-    @classmethod
-    def fromPropagator(cls, time, psi,
-                       propagator: Propagator,
-                       label=None):
-        obj = cls(time, psi, lambda _: None, label=label)
-        obj._propagator = propagator
-        return obj
+        The system is constructed from initial time, initial state, the
+        hamiltonian and an object implementing the Propagator interface. A
+        time-dependent hamiltonian must be passed to the constructor as a
+        callable taking the time as only argument. Optionally, a label for
+        the schedule can be set.
+        """
+        if not isinstance(propagator, Propagator) and hamiltonian is not None:
+            TypeError("Propagator does not implement interface.")
+        if hamiltonian is None and propagator is not None:
+            raise ValueError("Propagator can only be passed with"
+                             " hamiltonian.")
 
-    def __init__(self, time: float, psi: np.ndarray,
-                 propagator_factory: _PropagatorFactory,
-                 label=None):
-        self.time = time
-        self.psi = psi
+        self._initial_time = initial_time
+        self.psi = initial_state
+        self._validate_hamiltonian(hamiltonian)
+        self._ham = hamiltonian
+        self._propagator = propagator
+        self.has_propagator = self._propagator is not None
+        if self.has_propagator:
+            self._propagator.initialize_time(initial_time, initial_state)
+        self._sys_params: Mapping = None
         self.label = label
-        self._propagator = propagator_factory(self.psi)
-        Propagator.register_object(self._propagator)
-        if not isinstance(self._propagator, Propagator):
-            raise TypeError("Given propagator is not an"
-                            " instance of the interface")
 
-    def _setPsi(self, new_psi: np.ndarray):
-        self.psi = new_psi
-        self._propagator._psi = self.psi
+    @property
+    def is_stationary(self):
+        """True, if the hamiltonian is time-independent."""
+        return inspect.isfunction(self._ham)
+
+    @property
+    def time(self):
+        return self._propagator.time
+
+    def propagate(self, timestep):
+        """Propagate the system by timestep."""
+        if not self.has_propagator:
+            raise RuntimeError("No propagator was set for this system.")
+        self.psi = self._propagator.propagate(self.psi, timestep)
         return
 
-    def propagate(self, timestep) -> None:
-        self._propagator._psi = self.psi
-        self.psi = self._propagator(self.time, timestep)
-        self.time += timestep
-        return
-
-    def set_t0(self, t0):
-        self.time = t0
-        self._propagator.set_t0(t0)
+    def set_system_parameters(self, parameters: Mapping):
+        self._sys_params = parameters

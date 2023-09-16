@@ -2,8 +2,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .core import Protocol, ProtocolGraph
+    from .core import Protocol
     from .graph import GraphNodeBase
+    from .schedule import Schedule
 
 from abc import ABC, abstractmethod
 import numpy as np
@@ -28,11 +29,11 @@ class ProtocolPreprocessor(PreprocessorABC):
     """Class for preprocessing the entire protocol."""
     def __init__(self, protocol: Protocol, forced_start_time: float = None):
         self._protocol = protocol
-        self._graph_preprocessors: tuple[ProtocolGraphPreprocessor] = ()
+        self._graph_preprocessors: tuple[SchedulePreprocessor] = ()
         self._start_time = forced_start_time
-        for graph in self._protocol._graphs:
+        for schedule in self._protocol._schedules:
             self._graph_preprocessors += (
-                ProtocolGraphPreprocessor(graph, self._start_time),)
+                SchedulePreprocessor(schedule, self._start_time),)
 
     def run(self):
         for preproc in self._graph_preprocessors:
@@ -40,42 +41,43 @@ class ProtocolPreprocessor(PreprocessorABC):
         return
 
 
-class ProtocolGraphPreprocessor(PreprocessorABC):
-    """Class for preprocessing a graph of a protocol."""
-    def __init__(self, graph: ProtocolGraph, forced_start_time: float = None):
-        self._graph = graph
-        self._schedule_preprocessor = None
-        self._start_time = forced_start_time
-        if self._start_time is None:
-            try:
-                self._start_time = self._graph.root.options["start_time"]
-            except KeyError:
-                try:
-                    self._start_time = self._graph._protocol.global_options[
-                        "graph"]["start_time"]
-                except KeyError:
-                    self._start_time = 0.0
-        self._graph.tstate.set_t0(self._start_time)
-        self._schedule_preprocessor = SchedulePreprocessor(
-            self._graph.root, self._start_time)
+class SchedulePreprocessor(PreprocessorABC):
+    """Class for preprocessing a schedule of a protocol."""
+    def __init__(self, schedule: Schedule, forced_start_time: float = None):
+        self._schedule = schedule
+        self._graph_preprocessor = None
+        self._forced_start_time = forced_start_time
+        self._graph_preprocessor = GraphPreprocessor(
+            self._schedule.root, self._schedule.start_time)
 
     def run(self):
-        self._schedule_preprocessor.run()
-        for routine in self._graph.leafs:
+        if self._forced_start_time is not None:
+            self._schedule.set_start_time(self._forced_start_time)
+            self._schedule._reinitialize_system()
+        if not self._schedule.system_initialized:
+            raise RuntimeError("System not initialized.")
+
+        if not self._schedule._system.has_propagator:
+            for stage in self._schedule.get_rank(1):
+                if stage._options["type"] == "evolution":
+                    raise ValueError("Schedule contains evolution stages but"
+                                     " no propagator was set.")
+        self._graph_preprocessor.run()
+        for routine in self._schedule.leafs:
             if "kwargs" not in routine._options:
                 routine._options["kwargs"] = {}
-        self._graph.graph_ready = True
+        self._schedule.graph_initialized = True
         return
 
 
-class SchedulePreprocessor(PreprocessorABC):
-    """Class for preprocessing a schedule node."""
-    def __init__(self, schedule: GraphNodeBase, start_time: float):
-        self._schedule = schedule
+class GraphPreprocessor(PreprocessorABC):
+    """Class for preprocessing a schedule node of a graph."""
+    def __init__(self, graph: GraphNodeBase, start_time: float):
+        self._graph = graph
         self._start_time = start_time
-        self._stage_preprocessors: tuple[StagePreprocessor] = ()
-        for stage in self._schedule.children:
-            self._stage_preprocessors += (StagePreprocessor(stage),)
+        self._stage_preprocessors: tuple[StageNodePreprocessor] = ()
+        for stage in self._graph.children:
+            self._stage_preprocessors += (StageNodePreprocessor(stage),)
 
     def run(self):
         start_time = self._start_time
@@ -85,9 +87,9 @@ class SchedulePreprocessor(PreprocessorABC):
         return
 
 
-class StagePreprocessor(PreprocessorABC):
+class StageNodePreprocessor(PreprocessorABC):
     """
-    Class for preprocessing a stage. In evolution stages, monitoring and
+    Class for preprocessing a stage node. In evolution stages, monitoring and
     propagation routines will automatically be created.
     """
     @classmethod

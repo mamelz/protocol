@@ -2,9 +2,18 @@
 graph is to store options from a nested dictionary as found in a YAML file,
 while preserving the hierarchical structure.
 The main attribute of any node of the graph is a dictionary-like object
-called 'options'. If a necessary option of a node is missing, it is passed
-down from its parent nodes, if available.
+called 'options'. If a necessary option of a node is missing, it is inferred
+from its parent nodes, if available.
 """
+# TODO
+# refactoring: implement factory class that constructs the node classes and
+# infers their rank from their parent class, if the parent class is of type
+# GraphNodeNONE, construct the root rank class.
+# the factory class can then be called in a factory method that constructs
+# the actual node objects as instances of the node class, like this:
+# def factory(parent_node):
+#     child_class = factory_class(parent_node)
+#     child_node = child_class(parent_node)
 from __future__ import annotations
 
 from collections import UserDict

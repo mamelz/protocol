@@ -4,30 +4,36 @@ of 'Protocol' object.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from numpy import ndarray
+    # from numpy import ndarray
     from .core import Protocol
     from .graph import GraphNodeBase
-    from .interface import TimedState
+    from .interface import Propagator
     from .routines import RoutineABC
 
 from typing import Any
 
 from .graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
-from .interface import UserTState
+from .interface import System
 from .routines import PropagationRoutine, RegularRoutine
 
 
-class ProtocolGraph:
-    """Class representing a schedule of the protocol"""
+class Schedule:
+    """Class representing a schedule of the protocol."""
     def __init__(self, protocol: Protocol, root_options: dict):
         self._protocol = protocol
         root_class = GraphNodeMeta.fromRank(0, self._protocol._RANK_NAMES)
-        self._root_node = root_class(GraphNodeNONE(), root_options)
+        self._root_node: GraphNodeBase = root_class(
+            GraphNodeNONE(), root_options)
         self._external_options = {}
-        self.tstate: TimedState = None
+        try:
+            self.start_time = self.root._options["start_time"]
+        except KeyError:
+            self.start_time = 0.0
+        self._system: System = None
         self.ROUTINES: tuple[RoutineABC] = ()
         self.RESULTS: dict[str, dict[float, Any]] = {}
-        self.graph_ready = False
+        self.graph_initialized = False
+        self.system_initialized = False
 
     def __repr__(self) -> str:
         return self.map.values().__str__()
@@ -42,8 +48,8 @@ class ProtocolGraph:
 
     @property
     def label(self):
-        if self.tstate is not None:
-            return self.tstate.label
+        if self._system is not None:
+            return self._system.label
         return
 
     @property
@@ -66,6 +72,14 @@ class ProtocolGraph:
     @property
     def root(self) -> GraphNodeBase:
         return self._root_node
+
+    def _reinitialize_system(self):
+        init_state = self._system.psi
+        ham = self._system._ham
+        prop = self._system._propagator
+        sys_params = self._system._sys_params
+        label = self._system.label
+        self.initialize_system(init_state, ham, prop, sys_params, label)
 
     def get_node(self, ID: GraphNodeID) -> GraphNodeBase:
         """Returns node with given tuple as ID.tuple, if it exists"""
@@ -90,13 +104,9 @@ class ProtocolGraph:
 
         return tuple(filter(filter_func, self.map.values()))
 
-    def init_tstate(self, state: ndarray, propagator_factory, label):
-        self.tstate = UserTState(self.options["start_time"], state,
-                                 propagator_factory, label=label)
-
     def make_routines(self):
-        if not self.graph_ready:
-            raise ValueError("ProtocolGraph must be configured, first."
+        if not self.system_initialized:
+            raise ValueError("Schedule must be configured, first."
                              " Call .preprocessor().configure()")
 
         for node in self.get_rank(-1):
@@ -132,3 +142,53 @@ class ProtocolGraph:
         """
         self._external_kwargs = kwargs
         self._root_node.options["external"] = self._external_kwargs
+
+    def set_label(self, label: str):
+        """Set a label for the schedule."""
+        self.label = label
+        self.system_initialized = False
+
+    def set_start_time(self, start_time: float):
+        """Manually set this schedule's start time.
+
+        Args:
+            start_time (float): The start time of the schedule.
+        """
+        self.start_time = start_time
+        self.system_initialized = False
+
+    def set_system_parameters(self, system_parameters: dict):
+        """Set general parameters about the system.
+
+        Provide general parameters of the physical system, e.g. the length of
+        a spin chain. During execution of the schedule, the system parameters
+        are available for all routines of the schedule.
+
+        Args:
+            system_parameters (dict): The system parameters.
+        """
+        self._system.set_system_parameters(system_parameters)
+        self.system_initialized = False
+
+    def initialize_system(self, initial_state, hamiltonian=None,
+                          propagator: Propagator = None,
+                          system_parameters: dict = None, label=None):
+        """Initialize the physical system of the schedule.
+
+        Also initializes the propagator of the system. When no hamiltonian and
+        propagator are passed, only non-propagating routines can be performed.
+
+        Args:
+            initial_state (Any): The initial state.
+            hamiltonian (Any): The hamiltonian, can be callable for
+                time-dependent hamiltonians.
+            propagator (Propagator): An instance of the Propagator interface.
+            system_parameters (dict, optional): General parameters of the
+                system. Defaults to None.
+            label (str, optional): A label for the system. Defaults to None.
+        """
+        self._system = System(self.start_time, initial_state, hamiltonian,
+                              propagator, label=label)
+        if system_parameters is not None:
+            self.set_system_parameters(system_parameters)
+        self.system_initialized = True
