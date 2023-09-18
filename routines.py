@@ -26,7 +26,13 @@ sys.modules["functions"] = _functions_module
 _functions_spec.loader.exec_module(_functions_module)
 
 
+def _return_state(psi, /):
+    return psi
+
+
 def _fetch(name: str):
+    if name == "_return_state":
+        return _return_state
     return getattr(_functions_module, name)
 
 

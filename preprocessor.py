@@ -237,8 +237,8 @@ class StagePreprocessor(PreprocessorABC):
                 task.add_child(new_child)
 
         # at end of time evolution, always return state
-        self._stage.children[-1].add_child({"name": "psi",
-                                            "store_token": "LAST_PSI",
+        self._stage.children[-1].add_child({"name": "_return_state",
+                                            "store_token": "LAST_STATE",
                                             "TYPE": "AUTOMATIC"})
         return stage_stop_time
 
