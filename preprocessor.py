@@ -261,10 +261,15 @@ class StagePreprocessor(PreprocessorABC):
         for routine in self._stage.leafs:
             routine._options["TYPE"] = "USER"
 
-        if self._stage.options["type"] == "evolution":
+        try:
+            stage_type = self._stage.options["type"]
+        except KeyError:
+            stage_type = "default"
+
+        if stage_type == "evolution":
             return self._process_evolution()
 
-        elif self._stage.options["type"] == "sweep":
+        elif stage_type == "sweep":
             return self._process_sweep()
 
         return self._start_time
