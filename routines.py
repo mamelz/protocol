@@ -4,14 +4,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .core import Protocol
     from .graph import GraphNodeBase
-    from .interface import TimedState
+    from .schedule import Schedule, System
 
-from abc import ABC, abstractmethod
 import importlib.util
 import os
 import sys
+
+from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 
 from .settings import SETTINGS
@@ -102,20 +102,21 @@ class RoutineABC(ABC):
     _ROUTINE_OPTIONAL_KEYS: dict[str]
 
     @abstractmethod
-    def __call__(self, tstate: TimedState):
+    def __call__(self, system: System):
         pass
 
     @abstractmethod
-    def __init__(self, node: GraphNodeBase, protocol: Protocol):
+    def __init__(self, node: GraphNodeBase, schedule: Schedule):
         self._node = node
-        self._protocol = protocol
+        self._schedule = schedule
         self.options = {}
         self.live_tracking = False
+
         for key in self._ROUTINE_MANDATORY_KEYS:
             try:
                 option = self._node.options[key]
             except KeyError:
-                option = self._protocol.get_options(key)
+                option = self._schedule._protocol.get_option(key)
             self.options[key] = option
         for key in self._ROUTINE_OPTIONAL_KEYS.keys():
             try:
@@ -141,12 +142,13 @@ class RoutineABC(ABC):
 
 
 class RegularRoutine(RoutineABC):
-    """Class for arbitrary, non-propagating manipulations on the state."""
-    _ROUTINE_MANDATORY_KEYS = ("name", "sys_params", "kwargs")
+    """Class for arbitrary, non-propagating functions of the state."""
+    _ROUTINE_MANDATORY_KEYS = ("name", "kwargs")
     _ROUTINE_OPTIONAL_KEYS = {"output": True, "store_token": None}
 
-    def __init__(self, node: GraphNodeBase, protocol: Protocol):
-        super().__init__(node, protocol)
+    def __init__(self, node: GraphNodeBase, schedule: Schedule):
+        super().__init__(node, schedule)
+        self.options["sys_params"] = self._schedule._system.parameters
         self._external_kwargs = ()
         for key, kwarg in self.kwargs.items():
             if kwarg == "EXTERNAL":
@@ -159,10 +161,10 @@ class RegularRoutine(RoutineABC):
         self._rfunction = RoutineFunction.fromFunctionName(self.name)
         self._rfunction_partial = self._make_rfunction_partial()
 
-    def __call__(self, tstate: TimedState):
-        result = self._rfunction_partial(tstate.psi)
+    def __call__(self, system: System):
+        result = self._rfunction_partial(system.psi)
         if self._rfunction.overwrite_psi:
-            tstate.psi = result
+            system.psi = result
         if not self.options["output"]:
             return
         if result is not None:
@@ -227,17 +229,18 @@ class RegularRoutine(RoutineABC):
 
 class PropagationRoutine(RoutineABC):
     """Class for time propagation steps of the state."""
+    _ROUTINE_SYSTEM_KEYS = ()
     _ROUTINE_MANDATORY_KEYS = ("name", "step")
     _ROUTINE_OPTIONAL_KEYS = {}
     _TYPE = "PROPAGATE"
 
-    def __init__(self, node: GraphNodeBase, protocol: Protocol):
-        super().__init__(node, protocol)
+    def __init__(self, node: GraphNodeBase, schedule: Schedule):
+        super().__init__(node, schedule)
         assert self.name == "PROPAGATE"
         self.timestep = self.options["step"]
 
-    def __call__(self, tstate: TimedState):
-        tstate.propagate(self.timestep)
+    def __call__(self, system: System):
+        system.propagate(self.timestep)
         return
 
     @property

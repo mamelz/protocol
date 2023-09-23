@@ -11,6 +11,7 @@ _SCHEDULE_KEYWORDS_MANDATORY = {
 
 _SCHEDULE_KEYWORDS_OPTIONAL = {
     "global_options": dict,
+    "label": str
 }
 
 _STAGE_KEYWORDS_MANDATORY = {
