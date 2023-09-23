@@ -188,7 +188,7 @@ class Protocol:
         if system_kwargs is not None:
             graph.initialize_system(**system_kwargs)
         self._schedules += (graph,)
-        if graph.label is not None:
+        if hasattr(graph, "label"):
             if graph.label in self._label_map:
                 raise ValueError(f"Graph label {graph.label} already exists.")
             self._label_map[graph.label] = len(self._schedules) - 1
@@ -308,10 +308,10 @@ class Protocol:
             raise ValueError("Library settings not complete.")
         if len(self._schedules) == 0:
             raise ValueError("Protocol does not contain any schedules.")
-        for i, graph in enumerate(self._schedules):
-            graph = self._schedules[i]
-            id = f"'{graph.label}'" if graph.label is not None else i
-            if graph._system is None:
+        for i, schedule in enumerate(self._schedules):
+            schedule = self._schedules[i]
+            id = f"'{schedule.label}'" if schedule.label is not None else i
+            if not hasattr(schedule, "_system"):
                 raise ValueError(f"System of schedule {id} not set.")
 
         self._preprocessor(_start_time=force_start_time).run()

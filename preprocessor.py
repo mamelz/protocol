@@ -57,7 +57,7 @@ class SchedulePreprocessor(PreprocessorABC):
         if not self._schedule.system_initialized:
             raise RuntimeError("System not initialized.")
 
-        if not self._schedule._system.has_propagator:
+        if not hasattr(self._schedule._system, "_propagator"):
             for stage in self._schedule.get_rank(1):
                 if stage._options["type"] == "evolution":
                     raise ValueError("Schedule contains evolution stages but"

@@ -7,8 +7,6 @@ if TYPE_CHECKING:
     from .graph import GraphNodeBase
     from .routines import RoutineABC
 
-import inspect
-
 from typing import Any, Mapping
 
 from .graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
@@ -27,49 +25,33 @@ class System:
     the system in time.
     """
 
-    @staticmethod
-    def _validate_hamiltonian(hamiltonian):
-        """Check hamiltonian for correct signature, if callable."""
-        if not inspect.isfunction(hamiltonian):
-            return
-
-        sig = inspect.signature(hamiltonian)
-        if len(sig.parameters.keys()) != 1:
-            raise TypeError("Callable hamiltonians must take"
-                            " exactly one argument.")
-        return
-
-    def __init__(self, initial_time: float, initial_state, hamiltonian,
-                 propagator: Propagator, label: str = None):
+    def __init__(self, start_time: float, initial_state, sys_params: dict,
+                 propagator: Propagator = None):
         """Construct new physical system.
 
-        The system is constructed from initial time, initial state, the
-        hamiltonian and an object implementing the Propagator interface. A
-        time-dependent hamiltonian must be passed to the constructor as a
-        callable taking the time as only argument. Optionally, a label for
-        the schedule can be set.
+        The system is constructed from initial time, initial state and system
+        parameters.
+        Optionally, an instance of the `Propagator` interface can be passed.
+
+        Args:
+            start_time (float): The start time of the system.
+            initial_state (Any): The initial state.
+            sys_params (dict): General system parameters.
+            propagator (Propagator, optional): An instance of the Propagator
+                interface. Defaults to None.
+
+        Raises:
+            TypeError: Raised, when the propagator does not implement the
+                interface.
         """
-        if not isinstance(propagator, Propagator) and hamiltonian is not None:
-            TypeError("Propagator does not implement interface.")
-        if hamiltonian is None and propagator is not None:
-            raise ValueError("Propagator can only be passed with"
-                             " hamiltonian.")
+        if propagator is not None:
+            if not isinstance(propagator, Propagator):
+                raise TypeError("Propagator does not implement interface.")
+            self._propagator = propagator
 
-        self._initial_time = initial_time
+        self._time = start_time
         self.psi = initial_state
-        self._validate_hamiltonian(hamiltonian)
-        self._ham = hamiltonian
-        self._propagator = propagator
-        self.has_propagator = self._propagator is not None
-        if self.has_propagator:
-            self._propagator.initialize_time(initial_time, initial_state)
-        self._sys_params: Mapping = None
-        self.label = label
-
-    @property
-    def is_stationary(self):
-        """True, if the hamiltonian is time-independent."""
-        return inspect.isfunction(self._ham)
+        self._sys_params = sys_params
 
     @property
     def parameters(self):
@@ -78,13 +60,14 @@ class System:
 
     @property
     def time(self):
-        return self._propagator.time
+        return self._time
 
     def propagate(self, timestep):
         """Propagate the system by timestep."""
-        if not self.has_propagator:
-            raise RuntimeError("No propagator was set for this system.")
-        self.psi = self._propagator.propagate(self.psi, timestep)
+        if not hasattr(self, "_propagator"):
+            raise RuntimeError("No propagator was set.")
+        self.psi = self._propagator(self.psi, self._time, timestep)
+        self._time += timestep
         return
 
     def set_system_parameters(self, parameters: Mapping):
@@ -103,7 +86,10 @@ class Schedule:
             self.start_time = self.root._options["start_time"]
         except KeyError:
             self.start_time = 0.0
-        self._system: System = None
+        try:
+            self.label = self.root._options["label"]
+        except KeyError:
+            pass
         self.routines: tuple[RoutineABC] = ()
         self.results: dict[str, dict[float, Any]] = {}
         self.graph_initialized = False
@@ -119,13 +105,6 @@ class Schedule:
     def depth(self):
         """Number of ranks in the graph."""
         return len(max(self.map.keys(), key=lambda ID: len(ID.tuple)).tuple)
-
-    @property
-    def label(self):
-        """The label of the schedule."""
-        if self._system is not None:
-            return self._system.label
-        return
 
     @property
     def leafs(self) -> tuple[GraphNodeBase]:
@@ -150,11 +129,12 @@ class Schedule:
 
     def _reinitialize_system(self):
         init_state = self._system.psi
-        ham = self._system._ham
-        prop = self._system._propagator
+        if hasattr(self._system, "_propagator"):
+            prop = self._system._propagator
+        else:
+            prop = None
         sys_params = self._system._sys_params
-        label = self._system.label
-        self.initialize_system(init_state, ham, prop, sys_params, label)
+        self.initialize_system(init_state, sys_params, prop)
 
     def get_node(self, ID: GraphNodeID) -> GraphNodeBase:
         """Returns node with given tuple as ID.tuple, if it exists"""
@@ -180,12 +160,11 @@ class Schedule:
         return tuple(filter(filter_func, self.map.values()))
 
     def initialize_system(self, initial_state, system_parameters: dict,
-                          hamiltonian=None,
-                          propagator: Propagator = None, label=None):
+                          propagator: Propagator = None):
         """Initialize the physical system of the schedule.
 
-        Also initializes the propagator of the system. When no hamiltonian and
-        propagator are passed, only non-propagating routines can be performed.
+        Optionally, also sets a propagator for the system. Without propagator,
+        only non-propagating stages can be performed.
 
         Args:
             initial_state (Any): The initial state.
@@ -194,21 +173,16 @@ class Schedule:
             hamiltonian (Any): The hamiltonian, can be callable for
                 time-dependent hamiltonians.
             propagator (Propagator): An instance of the Propagator interface.
-            label (str, optional): A label for the system. Defaults to None.
         """
-        if label is not None and label in self._protocol._label_map:
-            raise ValueError(f"Label {label} already taken.")
 
-        self._system = System(self.start_time, initial_state, hamiltonian,
-                              propagator, label=label)
-        if system_parameters is not None:
-            self._system.set_system_parameters(system_parameters)
+        self._system = System(self.start_time, initial_state,
+                              system_parameters, propagator)
         self.system_initialized = True
 
     def make_routines(self):
         if not self.system_initialized:
-            raise ValueError("Schedule must be configured, first."
-                             " Call .preprocessor().configure()")
+            raise ValueError("System must be initialized, first."
+                             " Call .initialize_system().")
 
         for node in self.get_rank(-1):
             if node.options["name"] == "PROPAGATE":
@@ -251,15 +225,16 @@ class Schedule:
     def set_label(self, label: str):
         """Set a label for the schedule."""
         self.label = label
-        self._reinitialize_system()
 
     def set_start_time(self, start_time: float):
-        """Manually set this schedule's start time.
+        """Manually set start time.
 
         Args:
             start_time (float): The start time of the schedule.
         """
         self.start_time = start_time
+        if self.system_initialized:
+            self._reinitialize_system()
 
     def set_system_parameters(self, system_parameters: dict):
         """Set general parameters about the system.
@@ -272,4 +247,3 @@ class Schedule:
             system_parameters (dict): The system parameters.
         """
         self._system.set_system_parameters(system_parameters)
-        self._reinitialize_system()

@@ -6,28 +6,19 @@ from typing import Any
 
 
 class Propagator(ABC):
-    """Interface representing a propagator."""
+    """Interface representing a propagator.
+
+    The implementation must be a callable and should take 3 arguments:
+    state, time (float), timestep (float).
+    It returns the state after time evolution of one timestep.
+    """
 
     @classmethod
     def __subclasshook__(cls, __subclass: type) -> bool:
-        return (hasattr(__subclass, "propagate") and
-                callable(__subclass.propagate) and
-                hasattr(__subclass, "initialize_time") and
-                callable(__subclass.initialize_time) and
-                hasattr(__subclass, "time") and not
-                callable(__subclass.time))
+        return hasattr(__subclass, "__call__")
 
     @abstractmethod
-    def __init__(self):
-        self.time: float = None
-        raise NotImplementedError
-
-    @abstractmethod
-    def initialize_time(self, initial_time: float, initial_state) -> None:
-        """Initialize propagator with an initial time and initial state."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def propagate(self, state, timestep: float) -> Any:
-        """Propagate state by timestep and return state."""
+    def __call__(self, state: Any, time: float, timestep: float) -> Any:
+        """Propagate state from (time) to (time + timestep) and return state.
+        """
         raise NotImplementedError
