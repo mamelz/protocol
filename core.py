@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from typing import Any, Union
+from typing import Any, Sequence, Union
 
 from .parser_ import ProtocolConfiguration
 from .preprocessor import ProtocolPreprocessor
@@ -238,7 +238,8 @@ class Protocol:
         """
         return self.global_options[key]
 
-    def get_results(self, quantities: tuple = (), schedule_id=None)\
+    def get_results(self, schedules: Sequence = None,
+                    quantities: Sequence = None)\
             -> FrozenDict[str, dict[str, dict[float, Any]]]:
         """Return results after execution of the protocol.
 
@@ -253,7 +254,8 @@ class Protocol:
 
         Args:
             quantities (Sequence[str]): Sequence of names of routine outputs.
-            schedule_id (tuple): Tuple of labels and/or indices of schedules.
+            schedule_id (Sequence): Sequence of labels and/or indices of
+                schedules.
 
         Returns:
             FrozenDict[str, dict[str, dict[float, Any]]]:
@@ -261,31 +263,29 @@ class Protocol:
                 outputs. The first key specifies the schedule, the second key
                 specifies the time corresponding to the outputs.
         """
-        output_dict = {}
-        if schedule_id is None:
-            graphs = self._schedules_performed
+        output_sched_keys = ()
+        if schedules is None:
+            schedule_ids = self._schedules_performed
         else:
-            graphs = tuple(schedule_id)
+            schedule_ids = tuple(schedules)
 
-        for identifier in graphs:
+        for identifier in schedule_ids:
             key = self._get_schedule(identifier).label
             if key is None:
                 key = identifier
-            output_dict[key] = {}
+            output_sched_keys += (key,)
 
-        if schedule_id is not None and (
-                schedule_id not in output_dict):
-            assert len(output_dict.values()) == 0
-            output_dict[schedule_id] = output_dict.values()[0]
+        output_dict = {sched: self._get_schedule(sched).results for sched
+                       in output_sched_keys}
 
-        if quantities == ():
-            for graph_idt in output_dict.keys():
-                output_dict[graph_idt] = self._get_schedule(graph_idt).results
-        else:
-            for graph_idt in output_dict.keys():
-                for qname in quantities:
-                    output_dict[graph_idt][qname] = self._get_schedule(
-                        graph_idt).results[qname]
+        if quantities is not None:
+            qnames_keep = tuple(quantities)
+            output_dict_all = output_dict.copy()
+            output_dict = {}
+            for sched, results in output_dict_all.items():
+                output_dict[sched] = {
+                    qname: results[qname] for qname in qnames_keep}
+
         return FrozenDict(output_dict)
 
     def initialize(self, force_start_time: float = None):
