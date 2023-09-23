@@ -1,8 +1,5 @@
 """Module for the main class 'Protocol'."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from numpy import ndarray
 
 import sys
 import textwrap
@@ -45,10 +42,11 @@ class Protocol:
             self._config = None
 
         self._schedules: tuple[Schedule] = ()
-        self._label_map: dict[str, int] = {}
+        # self._label_map: dict[str, int] = {}
         if self._config is not None:
             for options in self._config.schedules:
-                self._schedules += (Schedule(self, options),)
+                # self._schedules += (Schedule(self, options),)
+                self.add_schedule(options)
         self._live_tracking = ()
         self._results = {}
         self._initialized = False
@@ -68,6 +66,16 @@ class Protocol:
                 res[key] = self._config[key]
 
         return res
+
+    @property
+    def _label_map(self):
+        map = {}
+        for i, schedule in enumerate(self._schedules):
+            if schedule.label is None:
+                continue
+            map.update({schedule.label: i})
+
+        return map
 
     @property
     def num_schedules(self):
@@ -100,19 +108,20 @@ class Protocol:
     def _preprocessor(self, _start_time=None):
         return ProtocolPreprocessor(self, _start_time)
 
-    def _perform_n(self, id):
+    def _perform_schedule(self, id):
+        """Perform particular schedule."""
         if isinstance(self._results, FrozenDict):
             self._results = dict(self._results)
 
-        graph: Schedule = self._get_schedule(id)
+        schedule: Schedule = self._get_schedule(id)
         if isinstance(id, str):
             schedule_idx = self._label_map[id]
         else:
             schedule_idx = id
 
-        num_stages = len(graph.get_rank(1))
-        assert isinstance(graph, Schedule)
-        for i, routine in enumerate(graph.ROUTINES):
+        num_stages = len(schedule.get_rank(1))
+        assert isinstance(schedule, Schedule)
+        for i, routine in enumerate(schedule.routines):
             assert isinstance(routine, RoutineABC)
             stage_idx = routine._node.parent_of_rank(1).ID.local + 1
 
@@ -122,18 +131,18 @@ class Protocol:
             else:
                 name_string = (f"{routine._TYPE:>10}"
                                f" {routine.store_token:<20}")
-            schedule_name = schedule_idx + 1 if graph.label is None else (
-                f"'{graph.label}'")
+            schedule_name = schedule_idx + 1 if schedule.label is None else (
+                f"'{schedule.label}'")
             text_prefix = " | ".join([
                 f"SCHEDULE {schedule_name:>6}:",
                 f"STAGE {stage_idx:>3}/{num_stages:<3}",
-                f"ROUTINE {i + 1:>{len(str(len(graph.ROUTINES)))}}"  # no comma
-                f"/{len(graph.ROUTINES)}",
-                f"TIME {f'{graph._system.time:.4f}':>10}",
+                f"ROUTINE {i + 1:>{len(str(len(schedule.routines)))}}"
+                f"/{len(schedule.routines)}",
+                f"TIME {f'{schedule._system.time:.4f}':>10}",
                 f"{name_string}"])
             textwrapper = textwrap.TextWrapper(width=250,
                                                initial_indent=text_prefix)
-            output = routine(graph._system)
+            output = routine(schedule._system)
             if routine.live_tracking:
                 output_text = textwrapper.fill(f": {output[1]}")
             else:
@@ -144,26 +153,29 @@ class Protocol:
             if output is None:
                 continue
 
-            if output[0] not in graph.RESULTS:
-                graph.RESULTS[output[0]] = {graph._system.time: output[1]}
+            if output[0] not in schedule.results:
+                schedule.results[output[0]] = {
+                    schedule._system.time: output[1]}
             else:
-                graph.RESULTS[output[0]].update(
-                    {graph._system.time: output[1]})
+                schedule.results[output[0]].update(
+                    {schedule._system.time: output[1]})
 
-        if graph.label is not None:
-            self._results[graph.label] = graph.RESULTS
-        self._results[schedule_idx] = graph.RESULTS
+        if schedule.label is not None:
+            self._results[schedule.label] = schedule.results
+        self._results[schedule_idx] = schedule.results
         self._results = FrozenDict(self._results)
         self._schedules_performed += (schedule_idx,)
         return
 
-    def add_schedule(self, schedule_options: dict, **tstate_args):
+    def add_schedule(self, schedule_options: dict, system_kwargs: dict = None):
         """Add a schedule to the protocol, configured by `schedule_options`.
 
         Optionally, initialize the timed state of the schedule.
 
         Args:
             schedule_options (dict): The options of the schedule.
+            system_kwargs (dict): Keyword arguments for the
+                Schedule.initialize_system() method.
 
         Raises:
             ValueError: Raised when `schedule_options` specify label which is
@@ -173,8 +185,8 @@ class Protocol:
             Schedule: The newly added Schedule.
         """
         graph = Schedule(self, schedule_options)
-        if tstate_args is not None:
-            graph.init_tstate(**tstate_args)
+        if system_kwargs is not None:
+            graph.initialize_system(**system_kwargs)
         self._schedules += (graph,)
         if graph.label is not None:
             if graph.label in self._label_map:
@@ -183,18 +195,21 @@ class Protocol:
 
         return graph
 
-    def duplicate_schedule(self, schedule_id: Union[str, int], **tstate_args):
+    def duplicate_schedule(self, schedule_id: Union[str, int],
+                           system_kwargs: dict = None):
         """Duplicate a schedule identified by `schedule_id`.
 
         Args:
             schedule_id (Union[str, int]): The label or index of an already
-                                           registered schedule.
+                registered schedule.
+            system_kwargs (dict): Keyword arguments for the
+                Schedule.initialize_system() method.
 
         Returns:
             Schedule: The duplicated Schedule.
         """
         return self.add_schedule(
-            self._get_schedule(schedule_id).root._options, **tstate_args)
+            self._get_schedule(schedule_id).root._options, system_kwargs)
 
     def finalize(self):
         """Construct the routines of the protocol, preparing it for execution.
@@ -207,12 +222,12 @@ class Protocol:
 
         for graph in self._schedules:
             graph.make_routines()
-            for routine in graph.ROUTINES:
+            for routine in graph.routines:
                 if routine.store_token in self._live_tracking:
                     routine.enable_live_tracking()
         self._finalized = True
 
-    def get_options(self, key: str):
+    def get_option(self, key: str):
         """Return value of global option `key`.
 
         Args:
@@ -265,12 +280,12 @@ class Protocol:
 
         if quantities == ():
             for graph_idt in output_dict.keys():
-                output_dict[graph_idt] = self._get_schedule(graph_idt).RESULTS
+                output_dict[graph_idt] = self._get_schedule(graph_idt).results
         else:
             for graph_idt in output_dict.keys():
                 for qname in quantities:
                     output_dict[graph_idt][qname] = self._get_schedule(
-                        graph_idt).RESULTS[qname]
+                        graph_idt).results[qname]
         return FrozenDict(output_dict)
 
     def initialize(self, force_start_time: float = None):
@@ -308,7 +323,7 @@ class Protocol:
 
         Args:
             schedule_id (str | int, optional): Identifier for schedule.
-                                               Defaults to None.
+                Defaults to None.
 
         Raises:
             ValueError: Raised, if the protocol was not ready for execution.
@@ -318,9 +333,9 @@ class Protocol:
 
         if schedule_id is None:
             for i in range(self.num_schedules):
-                self._perform_n(i)
+                self._perform_schedule(i)
         else:
-            self._perform_n(schedule_id)
+            self._perform_schedule(schedule_id)
         return
 
     def schedule(self, identifier: Union[int, str]) -> Schedule:
@@ -365,24 +380,4 @@ class Protocol:
         if isinstance(names, str):
             names = (names,)
         self._live_tracking = names
-        return
-
-    def set_tstate(self, schedule_id: Union[int, str], state: ndarray,
-                   propagator_factory, label=None):
-        """Set up the time-dependent state of a schedule.
-
-        This method sets the initial state of the schedule. Furthermore,
-        a factory method is passed that generates the propagator for the state.
-
-        Args:
-            schedule_id (Union[int, str]): Schedule identifier.
-            state (ndarray): The initial state for this schedule.
-            propagator_factory (_type_): Factory method that generates an
-                implementation of the `Propagator` interface.
-            label (_type_, optional): Label of the state. Defaults to None.
-        """
-        schedule = self._get_schedule(schedule_id)
-        schedule.init_tstate(state, propagator_factory, label)
-        if schedule.label is not None:
-            self._label_map[schedule.label] = self._schedules.index(schedule)
         return
