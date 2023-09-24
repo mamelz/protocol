@@ -89,7 +89,7 @@ class Schedule:
         try:
             self.label = self.root._options["label"]
         except KeyError:
-            pass
+            self.label = None
         self.routines: tuple[RoutineABC] = ()
         self.results: dict[str, dict[float, Any]] = {}
         self.graph_initialized = False

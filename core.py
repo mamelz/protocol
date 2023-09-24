@@ -9,7 +9,6 @@ from .parser_ import ProtocolConfiguration
 from .preprocessor import ProtocolPreprocessor
 from .schedule import Schedule
 from .routines import RoutineABC, PropagationRoutine
-from .settings import SETTINGS
 from .utils import FrozenDict
 
 
@@ -42,10 +41,8 @@ class Protocol:
             self._config = None
 
         self._schedules: tuple[Schedule] = ()
-        # self._label_map: dict[str, int] = {}
         if self._config is not None:
             for options in self._config.schedules:
-                # self._schedules += (Schedule(self, options),)
                 self.add_schedule(options)
         self._live_tracking = ()
         self._results = {}
@@ -74,7 +71,6 @@ class Protocol:
             if schedule.label is None:
                 continue
             map.update({schedule.label: i})
-
         return map
 
     @property
@@ -104,9 +100,6 @@ class Protocol:
         if isinstance(identifier, str):
             return self._schedules[self._label_map[identifier]]
         raise TypeError("Invalid identifier type.")
-
-    def _preprocessor(self, _start_time=None):
-        return ProtocolPreprocessor(self, _start_time)
 
     def _perform_schedule(self, id):
         """Perform particular schedule."""
@@ -184,16 +177,17 @@ class Protocol:
         Returns:
             Schedule: The newly added Schedule.
         """
-        graph = Schedule(self, schedule_options)
-        if system_kwargs is not None:
-            graph.initialize_system(**system_kwargs)
-        self._schedules += (graph,)
-        if hasattr(graph, "label"):
-            if graph.label in self._label_map:
-                raise ValueError(f"Graph label {graph.label} already exists.")
-            self._label_map[graph.label] = len(self._schedules) - 1
+        schedule = Schedule(self, schedule_options)
+        if schedule.label is not None:
+            if schedule.label in self._label_map:
+                raise ValueError(
+                    f"Graph label {schedule.label} already exists.")
 
-        return graph
+        if system_kwargs is not None:
+            schedule.initialize_system(**system_kwargs)
+
+        self._schedules += (schedule,)
+        return schedule
 
     def duplicate_schedule(self, schedule_id: Union[str, int],
                            system_kwargs: dict = None):
@@ -220,9 +214,9 @@ class Protocol:
         if not self._initialized:
             raise ValueError("Protocol must be initialized, first.")
 
-        for graph in self._schedules:
-            graph.make_routines()
-            for routine in graph.routines:
+        for schedule in self._schedules:
+            schedule.make_routines()
+            for routine in schedule.routines:
                 if routine.store_token in self._live_tracking:
                     routine.enable_live_tracking()
         self._finalized = True
@@ -288,7 +282,7 @@ class Protocol:
 
         return FrozenDict(output_dict)
 
-    def initialize(self, force_start_time: float = None):
+    def initialize(self, forced_start_time: float = None):
         """Initialize protocol after at least one schedule was added.
 
         Optionally, force a start time for all schedules.
@@ -299,22 +293,21 @@ class Protocol:
                 schedules. Defaults to None.
 
         Raises:
-            ValueError: Raised, if a library setting is missing.
             ValueError: Raised, if no schedules are set.
             ValueError: Raised, if a schedule is not initialized with a
                 system.
         """
-        if not SETTINGS.check():
-            raise ValueError("Library settings not complete.")
+
         if len(self._schedules) == 0:
             raise ValueError("Protocol does not contain any schedules.")
         for i, schedule in enumerate(self._schedules):
             schedule = self._schedules[i]
             id = f"'{schedule.label}'" if schedule.label is not None else i
             if not hasattr(schedule, "_system"):
-                raise ValueError(f"System of schedule {id} not set.")
+                raise ValueError(
+                    f"System of schedule {id} is not initialized.")
 
-        self._preprocessor(_start_time=force_start_time).run()
+        ProtocolPreprocessor(self, forced_start_time=forced_start_time).run()
         self._initialized = True
         return
 
