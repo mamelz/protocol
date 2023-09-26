@@ -1,8 +1,8 @@
 """Useful tools."""
-import collections
+from collections.abc import Mapping
 
 
-class FrozenDict(collections.Mapping):
+class FrozenDict(Mapping):
     """
     Immutable dictionary-like type. Found at:
     https://stackoverflow.com/questions/2703599/what-would-a-frozen-dict-be
