@@ -174,7 +174,7 @@ class StageNodePreprocessor(PreprocessorABC):
         # Creates options for propagation routine of given stepsize.
         def propagation_routine(timestep: float):
             return {
-                "name": "PROPAGATE",
+                "routine_name": "PROPAGATE",
                 "step": timestep,
             }
 
@@ -239,7 +239,7 @@ class StageNodePreprocessor(PreprocessorABC):
                 task.add_child(new_child)
 
         # at end of time evolution, always return state
-        self._stage.children[-1].add_child({"name": "_return_state",
+        self._stage.children[-1].add_child({"routine_name": "_return_state",
                                             "store_token": "LAST_STATE",
                                             "TYPE": "AUTOMATIC"})
         return stage_stop_time

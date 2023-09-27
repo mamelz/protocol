@@ -1,6 +1,7 @@
 """
-Module containing all available keywords of the yaml file with their valid
-data types or possible entries.
+Module containing all available keywords of the yaml file.
+Entries for mandatory keywords contain the data type as values, entries
+for optional keywords contain the respective default value.
 """
 
 
@@ -37,12 +38,19 @@ _TASK_KEYWORDS_OPTIONAL = {
 
 _ROUTINE_KEYWORDS_MANDATORY = {
     "kwargs": dict,
-    "name": str
+    "routine_name": str
 }
 
 _ROUTINE_KEYWORDS_OPTIONAL = {
-    "output": bool,
-    "store_token": str,
+    "description": "",
+    "live_tracking": False,
+    "output": True,
+    "store_token": "",
+}
+
+_EVO_ROUTINE_KEYWORDS_MANDATORY = {
+    "kwargs": dict,
+    "routine_name": str,
     "time": float
 }
 
@@ -61,6 +69,7 @@ KEYWORDS = {
     },
     "routine": {
         "mandatory": _ROUTINE_KEYWORDS_MANDATORY,
-        "optional": _ROUTINE_KEYWORDS_OPTIONAL
+        "optional": _ROUTINE_KEYWORDS_OPTIONAL,
+        "evo-mandatory": _EVO_ROUTINE_KEYWORDS_MANDATORY
     }
 }

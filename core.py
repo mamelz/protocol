@@ -8,7 +8,7 @@ from typing import Any, Sequence, Union
 from .parser_ import ProtocolConfiguration
 from .preprocessor import ProtocolPreprocessor
 from .schedule import Schedule
-from .routines import RoutineABC, PropagationRoutine
+from .routines import PropagationRoutine
 from .utils import FrozenDict
 
 
@@ -115,8 +115,7 @@ class Protocol:
         num_stages = len(schedule.get_rank(1))
         assert isinstance(schedule, Schedule)
         for i, routine in enumerate(schedule.routines):
-            assert isinstance(routine, RoutineABC)
-            stage_idx = routine._node.parent_of_rank(1).ID.local + 1
+            stage_idx = routine.stage_idx
 
             if isinstance(routine, PropagationRoutine):
                 prop_string = f"PROPAGATE BY {routine.timestep:3.4f}"

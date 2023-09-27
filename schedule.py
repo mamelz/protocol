@@ -11,7 +11,9 @@ from typing import Any, Mapping
 
 from .graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
 from .interface import Propagator
-from .routines import PropagationRoutine, RegularRoutine
+from .routines import (EvolutionRegularRoutine,
+                       PropagationRoutine,
+                       RegularRoutine)
 from .utils import FrozenDict
 
 
@@ -136,6 +138,10 @@ class Schedule:
         sys_params = self._system._sys_params
         self.initialize_system(init_state, sys_params, prop)
 
+    def get_global_option(self, key):
+        """Return global option of protocol."""
+        return self._protocol.get_option(key)
+
     def get_node(self, ID: GraphNodeID) -> GraphNodeBase:
         """Returns node with given tuple as ID.tuple, if it exists"""
         try:
@@ -158,6 +164,10 @@ class Schedule:
             return node.ID.rank == rank
 
         return tuple(filter(filter_func, self.map.values()))
+
+    def get_system_parameters(self):
+        """Return system parameters."""
+        return self._system.parameters
 
     def initialize_system(self, initial_state, system_parameters: dict,
                           propagator: Propagator = None):
@@ -185,8 +195,15 @@ class Schedule:
                              " Call .initialize_system().")
 
         for node in self.get_rank(-1):
-            if node.options["name"] == "PROPAGATE":
-                self.routines += (PropagationRoutine(node, self),)
+            stage_idx = node.parent_of_rank(1).ID.local + 1
+            if node.options["routine_name"] == "PROPAGATE":
+                self.routines += (
+                    PropagationRoutine(node.options["step"], stage_idx),)
+            elif node.parent_of_rank(1).options["type"] == "evolution":
+                if node.options["TYPE"] in ("AUTOMATIC", "MONITORING"):
+                    self.routines += (RegularRoutine(node, self),)
+                else:
+                    self.routines += (EvolutionRegularRoutine(node, self),)
             else:
                 self.routines += (RegularRoutine(node, self),)
 

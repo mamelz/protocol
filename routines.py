@@ -1,6 +1,6 @@
 """Module implementing routines: Callables to be invoked in the calculation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
@@ -11,9 +11,9 @@ import importlib.util
 import os
 import sys
 
-from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 
+from . import keywords
 from .settings import SETTINGS
 from .utils import FrozenDict
 
@@ -96,72 +96,27 @@ class RoutineFunction:
         return signature(self._function)
 
 
-class RoutineABC(ABC):
-    _ROUTINE_MANDATORY_KEYS: tuple[str]
-    # optional options with default values
-    _ROUTINE_OPTIONAL_KEYS: dict[str]
+class RegularRoutine:
+    _MANDATORY_KWORDS = keywords._ROUTINE_KEYWORDS_MANDATORY
+    _OPTIONAL_KWORDS = keywords._ROUTINE_KEYWORDS_OPTIONAL
 
-    @abstractmethod
-    def __call__(self, system: System):
-        pass
-
-    @abstractmethod
     def __init__(self, node: GraphNodeBase, schedule: Schedule):
         self._node = node
         self._schedule = schedule
-        self.options = {}
-        self.live_tracking = False
-
-        for key in self._ROUTINE_MANDATORY_KEYS:
-            try:
-                option = self._node.options[key]
-            except KeyError:
-                option = self._schedule._protocol.get_option(key)
-            self.options[key] = option
-        for key in self._ROUTINE_OPTIONAL_KEYS.keys():
-            try:
-                option = self._node.options[key]
-            except KeyError:
-                option = self._ROUTINE_OPTIONAL_KEYS[key]
-            self.options[key] = option
-
-    @property
-    def name(self) -> str:
-        return self.options["name"]
-
-    @property
-    @abstractmethod
-    def store_token(self):
-        pass
-
-    def disable_live_tracking(self):
-        self.live_tracking = False
-
-    def enable_live_tracking(self):
-        self.live_tracking = True
-
-
-class RegularRoutine(RoutineABC):
-    """Class for arbitrary, non-propagating functions of the state."""
-    _ROUTINE_MANDATORY_KEYS = ("name", "kwargs")
-    _ROUTINE_OPTIONAL_KEYS = {"output": True, "store_token": None}
-
-    def __init__(self, node: GraphNodeBase, schedule: Schedule):
-        super().__init__(node, schedule)
-        self.options["sys_params"] = self._schedule._system.parameters
-        self._external_kwargs = ()
-        for key, kwarg in self.kwargs.items():
-            if kwarg == "EXTERNAL":
-                self._external_kwargs += (key,)
+        self._set_mandatory_options()
+        self._set_optional_options()
+        self.options = dict(self._mandatory_options, **self._optional_options)
+        self.options["sys_params"] = self._schedule.get_system_parameters()
         self._get_external_kwargs()
-        if "TYPE" not in node._options:
+        self._rfunction = RoutineFunction.fromFunctionName(self.name)
+        self._rfunction_partial = self._make_rfunction_partial()
+        self.live_tracking = self._optional_options["live_tracking"]
+        if "TYPE" not in self._node._options:
             self._TYPE = "IRREGULAR"
         else:
             self._TYPE = node._options["TYPE"]
-        self._rfunction = RoutineFunction.fromFunctionName(self.name)
-        self._rfunction_partial = self._make_rfunction_partial()
 
-    def __call__(self, system: System):
+    def __call__(self, system: System) -> tuple[str, Any]:
         result = self._rfunction_partial(system.psi)
         if self._rfunction.overwrite_psi:
             system.psi = result
@@ -171,22 +126,43 @@ class RegularRoutine(RoutineABC):
             return (self.store_token, result)
         return
 
-    @property
-    def kwargs(self) -> dict:
-        return self.options["kwargs"]
-
-    @property
-    def store_token(self):
-        if self.options["store_token"] is not None:
-            return self.options["store_token"]
-        else:
-            return self.options["name"]
-
     def _get_external_kwargs(self):
-        for key in self._external_kwargs:
-            self.kwargs[key] = self._node.external_options[self.name][key]
-        self._external_kwargs = ()
+        for key, kwarg in self.kwargs.items():
+            if kwarg == "EXTERNAL":
+                self.kwargs[key] = self._node.external_options[self.name][key]
         return
+
+    def _get_mandatory_key(self, key):
+        try:
+            option = self._node.options[key]
+        except KeyError:
+            option = self._schedule.get_global_option(key)
+        return option
+
+    def _get_optional_key(self, key):
+        try:
+            return self._node.options[key]
+        except KeyError:
+            return
+
+    def _set_mandatory_options(self):
+        self._mandatory_options = {}
+        for key, dtype in self._MANDATORY_KWORDS.items():
+            try:
+                option = self._get_mandatory_key(key)
+            except KeyError:
+                raise KeyError(f"Missing mandatory routine option {key}")
+
+            if not isinstance(option, dtype):
+                raise TypeError(f"Routine option {key} has wrong type.")
+            self._mandatory_options[key] = option
+
+    def _set_optional_options(self):
+        self._optional_options = self._OPTIONAL_KWORDS
+        for key in self._OPTIONAL_KWORDS:
+            option = self._get_optional_key(key)
+            if option is not None:
+                self._optional_options[key] = option
 
     def _make_rfunction_partial(self) -> Callable:
         """Sets all parameters of the function except for 'psi'"""
@@ -226,23 +202,54 @@ class RegularRoutine(RoutineABC):
             return lambda psi: self._rfunction(psi, *bound_arguments.args,
                                                **bound_arguments.kwargs)
 
+    @property
+    def _raw_store_token(self):
+        return self._optional_options["store_token"]
 
-class PropagationRoutine(RoutineABC):
+    @property
+    def kwargs(self) -> dict:
+        try:
+            return self._mandatory_options["kwargs"]
+        except KeyError:
+            return
+
+    @property
+    def name(self):
+        return self._mandatory_options["routine_name"]
+
+    @property
+    def stage_idx(self):
+        return self._node.parent_of_rank(1).ID.local + 1
+
+    @property
+    def store_token(self):
+        if self._raw_store_token != "":
+            return self._raw_store_token
+        else:
+            return self.name
+
+    def disable_live_tracking(self):
+        self.live_tracking = False
+
+    def enable_live_tracking(self):
+        self.live_tracking = True
+
+
+class EvolutionRegularRoutine(RegularRoutine):
+    _MANDATORY_KWORDS = keywords._EVO_ROUTINE_KEYWORDS_MANDATORY
+
+
+class PropagationRoutine:
     """Class for time propagation steps of the state."""
-    _ROUTINE_SYSTEM_KEYS = ()
     _ROUTINE_MANDATORY_KEYS = ("name", "step")
-    _ROUTINE_OPTIONAL_KEYS = {}
     _TYPE = "PROPAGATE"
+    live_tracking = False
+    store_token = "PROPAGATE"
 
-    def __init__(self, node: GraphNodeBase, schedule: Schedule):
-        super().__init__(node, schedule)
-        assert self.name == "PROPAGATE"
-        self.timestep = self.options["step"]
+    def __init__(self, timestep, stage_idx):
+        self.timestep = timestep
+        self.stage_idx = stage_idx
 
     def __call__(self, system: System):
         system.propagate(self.timestep)
         return
-
-    @property
-    def store_token(self):
-        return "PROPAGATE"
