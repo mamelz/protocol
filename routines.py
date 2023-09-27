@@ -158,7 +158,7 @@ class RegularRoutine:
             self._mandatory_options[key] = option
 
     def _set_optional_options(self):
-        self._optional_options = self._OPTIONAL_KWORDS
+        self._optional_options = dict(self._OPTIONAL_KWORDS)
         for key in self._OPTIONAL_KWORDS:
             option = self._get_optional_key(key)
             if option is not None:
