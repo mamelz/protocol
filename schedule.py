@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Protocol
     from .graph import GraphNodeBase
-    from .routines import RoutineABC
 
 from typing import Any, Mapping
 
-from .graph import GraphNodeID, GraphNodeNONE, GraphNodeMeta
+from .graph import GraphNodeBase, GraphNodeID, GraphNodeNONE
 from .interface import Propagator
 from .routines import (EvolutionRegularRoutine,
                        PropagationRoutine,
@@ -80,9 +79,7 @@ class Schedule:
     """Class representing a schedule of the protocol."""
     def __init__(self, protocol: Protocol, root_options: dict):
         self._protocol = protocol
-        root_class = GraphNodeMeta.fromRank(0, self._protocol._RANK_NAMES)
-        self._root_node: GraphNodeBase = root_class(
-            GraphNodeNONE(), root_options)
+        self._root_node = GraphNodeBase(GraphNodeNONE(), root_options)
         self._external_options = {}
         try:
             self.start_time = self.root._options["start_time"]
@@ -92,7 +89,7 @@ class Schedule:
             self.label = self.root._options["label"]
         except KeyError:
             self.label = None
-        self.routines: tuple[RoutineABC] = ()
+        self.routines = ()
         self.results: dict[str, dict[float, Any]] = {}
         self.graph_initialized = False
         self.system_initialized = False
@@ -215,8 +212,7 @@ class Schedule:
         # for creation of node with correct ID
         parent_children = list(parent.children)
         parent.children = list(parent.children)[:ID.local]
-        new_node = GraphNodeMeta.fromRank(
-            ID.rank, self.root._RANK_NAMES)(parent, options)
+        new_node = GraphNodeBase(parent, options)
         self.map[ID] = new_node
         # replace node in original children attribute of parent
         parent_children[ID.local] = new_node

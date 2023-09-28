@@ -214,7 +214,7 @@ class StageNodePreprocessor(PreprocessorABC):
         # if stage configuration contained no tasks, add empty task to create
         # routines
         if self._stage.num_children == 0:
-            self._stage.add_child()
+            self._stage.add_children_from_options()
             last_task_id = self._stage.children[-1].ID
             new_routines_dict = {last_task_id: ()}
             for time in timesteps_arr:
@@ -234,14 +234,13 @@ class StageNodePreprocessor(PreprocessorABC):
                 prior_time = time
 
         for task in self._stage.children:
-            task.clear_children()
-            for new_child in new_routines_dict[task.ID]:
-                task.add_child(new_child)
+            task.set_children_from_options(new_routines_dict[task.ID])
 
         # at end of time evolution, always return state
-        self._stage.children[-1].add_child({"routine_name": "_return_state",
-                                            "store_token": "LAST_STATE",
-                                            "TYPE": "AUTOMATIC"})
+        self._stage.children[-1].add_children_from_options(
+            {"routine_name": "_return_state",
+             "store_token": "LAST_STATE",
+             "TYPE": "AUTOMATIC"})
         return stage_stop_time
 
     # TODO

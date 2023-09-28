@@ -17,12 +17,14 @@ from its parent nodes, if available.
 from __future__ import annotations
 
 from collections import UserDict
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Mapping, Union
+from typing import Mapping
 
 from .settings import SETTINGS
 
 _VERBOSE = SETTINGS.VERBOSE
+_RANK_NAMES = ("Schedule", "Stage", "Task", "Routine")
 
 
 @dataclass(frozen=True)
@@ -53,63 +55,42 @@ class GraphNodeID:
         return len(self.tuple) - 1
 
 
+NoneID = GraphNodeID(())
+
+
 class GraphNodeMeta(type):
     """Meta class for creation of node classes."""
-    # _RANK_NAMES: tuple[str]
+    _RANK_NAMES = _RANK_NAMES
+    _children = ()
 
-    @classmethod
-    def fromRank(mcls, rank: int, rank_names: tuple) -> GraphNodeBase:
-        """Returns class for nodes of rank 'rank'."""
-        cls_name = f"{rank_names[rank]}Node"
-        attrs = {"_RANK_NAMES": rank_names,
-                 "_RANK": rank}
-        if rank < len(rank_names) - 1:
-            attrs.update({"_CHILD_CLASS": mcls.fromRank(rank + 1,
-                                                        rank_names)})
-        return mcls.__new__(mcls, cls_name, (GraphNodeBase,), attrs)
+    @property
+    def _LEAF_RANK(mcls):
+        return len(mcls._RANK_NAMES) - 1
 
     def __call__(cls: GraphNodeMeta,
-                 parent: Union[GraphNodeBase, GraphNodeNONE],
+                 parent: GraphNodeBase | GraphNodeNONE,
                  options: Mapping):
-
-        _leaf_rank = len(cls._RANK_NAMES) - 1
-
-        if parent.rank == _leaf_rank:
+        if parent.rank == cls._LEAF_RANK:
             return GraphNodeNONE
 
-        if parent.rank < _leaf_rank - 1:
+        if parent.rank < cls._LEAF_RANK - 1:
             child_rank_name = cls._RANK_NAMES[parent.rank + 2]
-
-            def children(obj: GraphNodeBase):
-                return obj.children
-
             setattr(cls, f"{child_rank_name.lower()}s",
-                    property(children))
+                    property(lambda: obj._children))
 
         obj: GraphNodeBase = cls.__new__(cls, parent, options)
         cls.__init__(obj, parent, options)
-        assert cls._RANK == obj.rank
         return obj
 
 
-class GraphNodeBase:
+class GraphNodeBase(metaclass=GraphNodeMeta):
     """Base class for nodes of the graph."""
     _RANK_NAMES: tuple[str]
-    _RANK: int
-    _CHILD_CLASS: GraphNodeMeta
-
-    @staticmethod
-    def _getIDFromParent(parent: Union[GraphNodeBase, GraphNodeNONE])\
-            -> GraphNodeID:
-        """Infer own ID from the parent node."""
-        self_sibling_idx = len(parent.children)
-        parent_id_aslist = list(parent.ID.tuple)
-        parent_id_aslist.append(self_sibling_idx)
-        return GraphNodeID(tuple(parent_id_aslist))
 
     @classmethod
-    def _LEAF_RANK(cls):
-        return len(cls._RANK_NAMES) - 1
+    @property
+    def _LEAF_RANK(mcls):
+        return len(mcls._RANK_NAMES) - 1
 
     @classmethod
     def rank_name(cls, rank=None) -> str:
@@ -119,43 +100,28 @@ class GraphNodeBase:
         """
         if rank is None:
             return cls._RANK_NAMES[cls._RANK]
-        elif rank <= cls._LEAF_RANK():
+        elif rank <= cls._LEAF_RANK:
             return cls._RANK_NAMES[rank]
         else:
-            return None
-
-    @classmethod
-    @property
-    def isleaf(cls) -> bool:
-        """
-        True when this node is a leaf node, i.e. has lowest possible rank.
-        """
-        return (cls._RANK == cls._LEAF_RANK())
+            return ""
 
     def __init__(self, parent: GraphNodeBase, options: dict):
         self._parent = parent
         self._options = options
-        self._ID = self._getIDFromParent(parent)
         if _VERBOSE:
             print(f"{self.rank_name(self.rank).upper()}: {self.ID}")
-        self._children: tuple[GraphNodeBase] = ()
-        children_rank_name = self.rank_name(self.rank + 1)
-        if children_rank_name is not None:
-            try:
-                children_options_list =\
-                    self.options[f"{children_rank_name.lower()}s"]
-            except KeyError:
-                children_options_list = []
-        else:
-            children_options_list = []
-        for child_options in children_options_list:
-            self.add_child(child_options)
+        try:
+            self._children = tuple(
+                GraphNodeBase(self, opts) for opts in self._options[
+                    f"{self.rank_name(self.rank + 1).lower()}s"])
+        except KeyError:
+            self._children = ()
 
     def __repr__(self) -> str:
         return f"{self.rank_name(self.rank).upper()}_NODE: {self.ID}"
 
     @property
-    def children(self):
+    def children(self) -> tuple[GraphNodeBase]:
         return self._children
 
     @property
@@ -167,6 +133,20 @@ class GraphNodeBase:
             if self._RANK == 0:
                 raise KeyError("No external options set.")
             return self.parent.external_options
+
+    @property
+    def isleaf(self) -> bool:
+        """
+        True when this node is a leaf node, i.e. has lowest possible rank.
+        """
+        return (self.rank == self._LEAF_RANK)
+
+    @property
+    def ID(self) -> GraphNodeID:
+        if self.parent.ID == NoneID:
+            return GraphNodeID((0,))
+        return GraphNodeID(
+            (*self.parent.ID.tuple, self.parent.children.index(self)))
 
     @property
     def leafs(self) -> tuple[GraphNodeBase]:
@@ -182,10 +162,6 @@ class GraphNodeBase:
     @property
     def leaf_rank(self) -> int:
         return self._LEAF_RANK()
-
-    @property
-    def ID(self):
-        return self._ID
 
     @property
     def map(self) -> dict[GraphNodeID, GraphNodeBase]:
@@ -218,22 +194,32 @@ class GraphNodeBase:
     @property
     def rank(self) -> int:
         """The rank index of the node."""
-        return self._RANK
+        return self._parent.rank + 1
 
     @property
     def root(self) -> GraphNodeBase:
         """Returns the highest-rank parent node."""
         return self.parent_of_rank(0)
 
-    def add_child(self, options=None):
+    def add_children_from_options(self, options: Sequence[dict] | dict = {}
+                                  ) -> None:
+        """Create new child nodes and append them to this node's children.
+
+        Empty dicionaries as options generate empty child nodes.
+
+        Args:
+            options (Sequence[dict] | dict): The options of the new child
+                nodes.
         """
-        Adds a child node with given options. If options is None, creates empty
-        child node.
-        """
-        if options is None:
-            options = {}
-        self._children += (self._CHILD_CLASS(self, options),)
-        return
+        if not isinstance(options, Sequence):
+            self._children = (
+                *self._children, GraphNodeBase(self, options))
+            return
+        else:
+            self._children = (
+                *self._children,
+                *(GraphNodeBase(self, opts) for opts in options))
+            return
 
     def clear_children(self):
         """Sets 'children' attribute to empty tuple."""
@@ -322,6 +308,19 @@ class GraphNodeBase:
             return self.parent.previous(_i + 1)
         else:
             return GraphNodeNONE()
+
+    def set_children_from_options(self, options: Sequence[dict] = ({},)
+                                  ) -> None:
+        """Replace all children from sequence of options.
+
+        This deletes all children of the node and constructs new one from the
+        options. Options can be empty dictionaries.
+        Args:
+            options (Sequence[dict]): The options of the new children.
+        """
+        self._children = tuple(GraphNodeBase(self, opts)
+                               for opts in options)
+        return
 
 
 @dataclass(frozen=True)

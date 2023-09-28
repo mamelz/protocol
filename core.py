@@ -23,8 +23,6 @@ class Protocol:
     method.
     """
 
-    _RANK_NAMES = ("Schedule", "Stage", "Task", "Routine")
-
     def __init__(self, config_yaml_path: str = None):
         """Construct new protocol from configuration file.
 
