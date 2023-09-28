@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .graph import GraphNodeBase
+    from .graph import GraphNode
     from .schedule import Schedule, System
 
 import importlib.util
@@ -100,7 +100,7 @@ class RegularRoutine:
     _MANDATORY_KWORDS = keywords._ROUTINE_KEYWORDS_MANDATORY
     _OPTIONAL_KWORDS = keywords._ROUTINE_KEYWORDS_OPTIONAL
 
-    def __init__(self, node: GraphNodeBase, schedule: Schedule):
+    def __init__(self, node: GraphNode, schedule: Schedule):
         self._node = node
         self._schedule = schedule
         self._set_mandatory_options()

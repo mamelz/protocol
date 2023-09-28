@@ -4,11 +4,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Protocol
-    from .graph import GraphNodeBase
 
 from typing import Any, Mapping
 
-from .graph import GraphNodeBase, GraphNodeID, GraphNodeNONE
+from .graph import GraphNode, GraphNodeID, GraphNodeNONE
 from .interface import Propagator
 from .routines import (EvolutionRegularRoutine,
                        PropagationRoutine,
@@ -79,7 +78,7 @@ class Schedule:
     """Class representing a schedule of the protocol."""
     def __init__(self, protocol: Protocol, root_options: dict):
         self._protocol = protocol
-        self._root_node = GraphNodeBase(GraphNodeNONE(), root_options)
+        self._root_node = GraphNode(GraphNodeNONE(), root_options)
         self._external_options = {}
         try:
             self.start_time = self.root._options["start_time"]
@@ -106,7 +105,7 @@ class Schedule:
         return len(max(self.map.keys(), key=lambda ID: len(ID.tuple)).tuple)
 
     @property
-    def leafs(self) -> tuple[GraphNodeBase]:
+    def leafs(self) -> tuple[GraphNode]:
         return self.get_rank(-1)
 
     @property
@@ -123,7 +122,7 @@ class Schedule:
         return self.root._options
 
     @property
-    def root(self) -> GraphNodeBase:
+    def root(self) -> GraphNode:
         return self._root_node
 
     def _reinitialize_system(self):
@@ -139,7 +138,7 @@ class Schedule:
         """Return global option of protocol."""
         return self._protocol.get_option(key)
 
-    def get_node(self, ID: GraphNodeID) -> GraphNodeBase:
+    def get_node(self, ID: GraphNodeID) -> GraphNode:
         """Returns node with given tuple as ID.tuple, if it exists"""
         try:
             return self.map[ID]
@@ -147,17 +146,17 @@ class Schedule:
             print(f"Node with ID {ID} not in graph.")
             return GraphNodeNONE()
 
-    def get_node_from_tuple(self, ID_tuple: tuple) -> GraphNodeBase:
+    def get_node_from_tuple(self, ID_tuple: tuple) -> GraphNode:
         """Returns node with given tuple as ID.tuple, if it exists"""
         ID = GraphNodeID(ID_tuple)
         return self.get_node(ID)
 
-    def get_rank(self, rank: int) -> tuple[GraphNodeBase]:
+    def get_rank(self, rank: int) -> tuple[GraphNode]:
         """Return all nodes with given rank. 'rank' -1 returns the leafs"""
         if rank == -1:
             rank = self.depth - 1
 
-        def filter_func(node: GraphNodeBase) -> bool:
+        def filter_func(node: GraphNode) -> bool:
             return node.ID.rank == rank
 
         return tuple(filter(filter_func, self.map.values()))
@@ -212,7 +211,7 @@ class Schedule:
         # for creation of node with correct ID
         parent_children = list(parent.children)
         parent.children = list(parent.children)[:ID.local]
-        new_node = GraphNodeBase(parent, options)
+        new_node = GraphNode(parent, options)
         self.map[ID] = new_node
         # replace node in original children attribute of parent
         parent_children[ID.local] = new_node

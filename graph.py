@@ -68,7 +68,7 @@ class GraphNodeMeta(type):
         return len(mcls._RANK_NAMES) - 1
 
     def __call__(cls: GraphNodeMeta,
-                 parent: GraphNodeBase | GraphNodeNONE,
+                 parent: GraphNode | GraphNodeNONE,
                  options: Mapping):
         if parent.rank == cls._LEAF_RANK:
             return GraphNodeNONE
@@ -78,12 +78,12 @@ class GraphNodeMeta(type):
             setattr(cls, f"{child_rank_name.lower()}s",
                     property(lambda: obj._children))
 
-        obj: GraphNodeBase = cls.__new__(cls, parent, options)
+        obj: GraphNode = cls.__new__(cls, parent, options)
         cls.__init__(obj, parent, options)
         return obj
 
 
-class GraphNodeBase(metaclass=GraphNodeMeta):
+class GraphNode(metaclass=GraphNodeMeta):
     """Base class for nodes of the graph."""
     _RANK_NAMES: tuple[str]
 
@@ -105,14 +105,14 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         else:
             return ""
 
-    def __init__(self, parent: GraphNodeBase, options: dict):
+    def __init__(self, parent: GraphNode, options: dict):
         self._parent = parent
         self._options = options
         if _VERBOSE:
             print(f"{self.rank_name(self.rank).upper()}: {self.ID}")
         try:
             self._children = tuple(
-                GraphNodeBase(self, opts) for opts in self._options[
+                GraphNode(self, opts) for opts in self._options[
                     f"{self.rank_name(self.rank + 1).lower()}s"])
         except KeyError:
             self._children = ()
@@ -121,7 +121,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         return f"{self.rank_name(self.rank).upper()}_NODE: {self.ID}"
 
     @property
-    def children(self) -> tuple[GraphNodeBase]:
+    def children(self) -> tuple[GraphNode]:
         return self._children
 
     @property
@@ -149,7 +149,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
             (*self.parent.ID.tuple, self.parent.children.index(self)))
 
     @property
-    def leafs(self) -> tuple[GraphNodeBase]:
+    def leafs(self) -> tuple[GraphNode]:
         """The lowest-rank child nodes that originate from this node."""
         if self.isleaf:
             return (self,)
@@ -164,7 +164,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         return self._LEAF_RANK()
 
     @property
-    def map(self) -> dict[GraphNodeID, GraphNodeBase]:
+    def map(self) -> dict[GraphNodeID, GraphNode]:
         """
         Returns a dictionary, containing the {ID: Node} pairs of the node
         and all lower-rank nodes of the branch.
@@ -197,7 +197,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         return self._parent.rank + 1
 
     @property
-    def root(self) -> GraphNodeBase:
+    def root(self) -> GraphNode:
         """Returns the highest-rank parent node."""
         return self.parent_of_rank(0)
 
@@ -213,12 +213,12 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         """
         if not isinstance(options, Sequence):
             self._children = (
-                *self._children, GraphNodeBase(self, options))
+                *self._children, GraphNode(self, options))
             return
         else:
             self._children = (
                 *self._children,
-                *(GraphNodeBase(self, opts) for opts in options))
+                *(GraphNode(self, opts) for opts in options))
             return
 
     def clear_children(self):
@@ -251,7 +251,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
                 return self.parent.get_option(key, _rank_name=_rank_name,
                                               _evo=_evo)
 
-    def get_parent(self, n: int = 1) -> GraphNodeBase:
+    def get_parent(self, n: int = 1) -> GraphNode:
         """
         Returns n-th parent node, default is n=1 corresponding to the direct
         parent.
@@ -265,7 +265,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
             parent = parent._parent
         return parent
 
-    def next(self, _i=0) -> GraphNodeBase:
+    def next(self, _i=0) -> GraphNode:
         """
         The next node, the immediate sibling to the right. Parameter '_i' is
         for internal use.
@@ -274,7 +274,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
             if _i == 0:
                 return self.parent.children[self.ID.local + 1]
             else:
-                result: GraphNodeBase = self.parent.children[
+                result: GraphNode = self.parent.children[
                     self.ID.local + 1]
                 while _i > 0:
                     _i -= 1
@@ -285,11 +285,11 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         else:
             return GraphNodeNONE()
 
-    def parent_of_rank(self, n) -> GraphNodeBase:
+    def parent_of_rank(self, n) -> GraphNode:
         """Returns the parent with specified rank."""
         return self.get_parent(self.rank - n)
 
-    def previous(self, _i=0) -> GraphNodeBase:
+    def previous(self, _i=0) -> GraphNode:
         """
         The previous node, the immediate sibling to the left. Parameter '_i'
         is for internal use.
@@ -298,7 +298,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
             if _i == 0:
                 return self.parent.children[self.ID.local - 1]
             else:
-                result: GraphNodeBase = self.parent.children[
+                result: GraphNode = self.parent.children[
                     self.ID.local - 1]
                 while _i > 0:
                     _i -= 1
@@ -318,7 +318,7 @@ class GraphNodeBase(metaclass=GraphNodeMeta):
         Args:
             options (Sequence[dict]): The options of the new children.
         """
-        self._children = tuple(GraphNodeBase(self, opts)
+        self._children = tuple(GraphNode(self, opts)
                                for opts in options)
         return
 
@@ -343,7 +343,7 @@ class GraphNodeOptions(UserDict):
     nodes if it is not found in current node. However, setting and deleting
     options acts only on the current node.
     """
-    def __init__(self, node: GraphNodeBase):
+    def __init__(self, node: GraphNode):
         self._node = node
         super().__init__(self._node._options)
 

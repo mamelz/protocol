@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import Protocol
-    from .graph import GraphNodeBase
+    from .graph import GraphNode
     from .schedule import Schedule
 
 from abc import ABC, abstractmethod
@@ -12,7 +12,7 @@ import numpy as np
 
 class PreprocessorABC(ABC):
     """
-    Abstract base class for Preprocessors. They process options
+    Interface for Preprocessors. They process options
     of the given objects, modifying them if needed.
     """
     @abstractmethod
@@ -72,7 +72,7 @@ class SchedulePreprocessor(PreprocessorABC):
 
 class GraphPreprocessor(PreprocessorABC):
     """Class for preprocessing a schedule node of a graph."""
-    def __init__(self, graph: GraphNodeBase, start_time: float):
+    def __init__(self, graph: GraphNode, start_time: float):
         self._graph = graph
         self._start_time = start_time
         self._stage_preprocessors: tuple[StageNodePreprocessor] = ()
@@ -93,7 +93,7 @@ class StageNodePreprocessor(PreprocessorABC):
     propagation routines will automatically be created.
     """
     @classmethod
-    def check_node_empty(cls, node: GraphNodeBase):
+    def check_node_empty(cls, node: GraphNode):
         if node.isleaf:
             return node._options == {}
         if node.num_children == 0:
@@ -103,7 +103,7 @@ class StageNodePreprocessor(PreprocessorABC):
                 return False
         return True
 
-    def __init__(self, stage: GraphNodeBase):
+    def __init__(self, stage: GraphNode):
         self._stage = stage
         self._start_time = None
 
