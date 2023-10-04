@@ -4,50 +4,45 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .graph import GraphNode
-    from .schedule import Schedule, System
+    from .schedule import System
 
 import importlib.util
+import functools
 import os
-import sys
-
+from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 
-from . import keywords
 from .settings import SETTINGS
-from .utils import FrozenDict
 
 
 _functions_path = os.path.abspath(SETTINGS.FUNCTIONS_PATH)
 _functions_spec = importlib.util.spec_from_file_location(
    "functions", _functions_path)
-_functions_module = importlib.util.module_from_spec(_functions_spec)
-sys.modules["functions"] = _functions_module
-_functions_spec.loader.exec_module(_functions_module)
+_FUNCTIONS_MODULE = importlib.util.module_from_spec(_functions_spec)
+# sys.modules["functions"] = _functions_module
+_functions_spec.loader.exec_module(_FUNCTIONS_MODULE)
 
 
-def _return_state(psi, /):
-    return psi
+class RoutineInitializationError(Exception):
+    message = "Error during initialization of routine."
 
-
-def _fetch(name: str):
-    if name == "_return_state":
-        return _return_state
-    return getattr(_functions_module, name)
+    def __init__(self, message=None):
+        if message is not None:
+            self.message = message
+        super().__init__()
 
 
 class RoutineFunction:
-    """
-    Class for functions with consistent signature to be used as callables
-    in routines.
-    """
-    @classmethod
-    def fromFunctionName(cls, function_name):
-        return cls(_fetch(function_name))
+    """Callable representing a function, the core of a routine."""
+    _FUNCTIONS_MODULE = _FUNCTIONS_MODULE
 
-    def __init__(self, function: Callable):
-        self.name = function.__name__
-        self._function = function
+    def __init__(self, routine_name):
+        self._name = routine_name
+        if self._name == "_return_state":
+            self._function = lambda psi, /: psi
+        else:
+            self._function = getattr(self._FUNCTIONS_MODULE, routine_name)
+
         if hasattr(self._function, "overwrite_psi"):
             self.overwrite_psi = self._function.overwrite_psi
         else:
@@ -58,11 +53,27 @@ class RoutineFunction:
 
     def _params_of_kind(self, kind: _ParameterKind) -> dict[str, Parameter]:
         return {key: param for key, param in
-                signature(self._function).parameters.items() if param.kind
+                self.signature.parameters.items() if param.kind
                 == kind}
 
     @property
+    def args(self) -> NotImplemented:
+        """Return the *args of the function."""
+        raise NotImplementedError
+
+    @property
+    def kwargs(self) -> dict:
+        """Return all parameters that can be passed by dict unpacking"""
+        return {
+            **self._params_of_kind(Parameter.VAR_POSITIONAL),
+            **self._params_of_kind(Parameter.POSITIONAL_OR_KEYWORD),
+            **self._params_of_kind(Parameter.KEYWORD_ONLY),
+            **self._params_of_kind(Parameter.VAR_KEYWORD)
+        }
+
+    @property
     def mandatory_args(self) -> dict:
+        """Return all parameters that have no default values."""
         result = {}
         for key, param in self._params_of_kind(
                 Parameter.POSITIONAL_OR_KEYWORD).items():
@@ -76,6 +87,7 @@ class RoutineFunction:
 
     @property
     def optional_args(self) -> dict:
+        """Return all parameters that have default values."""
         result = {}
         for key, param in self._params_of_kind(
                 Parameter.POSITIONAL_OR_KEYWORD).items():
@@ -96,160 +108,169 @@ class RoutineFunction:
         return signature(self._function)
 
 
-class RegularRoutine:
-    _MANDATORY_KWORDS = keywords._ROUTINE_KEYWORDS_MANDATORY
-    _OPTIONAL_KWORDS = keywords._ROUTINE_KEYWORDS_OPTIONAL
+class Routine(ABC):
+    """Callables representing routines to be executed in a schedule."""
+    tag: str
+    type: str
 
-    def __init__(self, node: GraphNode, schedule: Schedule):
-        self._node = node
-        self._schedule = schedule
-        self._set_mandatory_options()
-        self._set_optional_options()
-        self.options = dict(self._mandatory_options, **self._optional_options)
-        self.options["sys_params"] = self._schedule.get_system_parameters()
-        self._get_external_kwargs()
-        self._rfunction = RoutineFunction.fromFunctionName(self.name)
-        self._rfunction_partial = self._make_rfunction_partial()
-        self.live_tracking = self._optional_options["live_tracking"]
-        if "TYPE" not in self._node._options:
-            self._TYPE = "IRREGULAR"
-        else:
-            self._TYPE = node._options["TYPE"]
+    @abstractmethod
+    def __init__(self, options: dict):
+        if not options["type"] == self.type:
+            raise ValueError(f"Wrong routine type: expected {self.type},"
+                             f" got {options['type']}")
+
+        self._options = options
+
+    @abstractmethod
+    def __call__(self, system: System):
+        pass
+
+    @property
+    def stage_idx(self):
+        return self._stage_idx
+
+    @stage_idx.setter
+    def stage_idx(self, new):
+        self._stage_idx = new
+
+#    def _set_options(self, options):
+#        """Write all options in ._options."""
+#        _mandatory_options = {}
+#        for key in self._spec.options.mandatory:
+#            _mandatory_options[key] = options[key]#
+
+#        for exgroup in self._spec.options.mandatory_exclusive:
+#            for key in exgroup:
+#                try:
+#                    _mandatory_options[key] = options[key]
+#                except KeyError:
+#                    continue#
+
+#        _optional_options = {}
+#        for key, default in self._spec.options.optional.items():
+#            try:
+#                _optional_options[key] = options[key]
+#            except KeyError:
+#                _optional_options[key] = default#
+
+#        for exgroup in self._spec.options.optional_exclusive:
+#            for key, default in exgroup.items():
+#                try:
+#                    _mandatory_options[key] = options[key]
+#                except KeyError:
+#                    _mandatory_options[key] = default
+#        self._options = dict(_mandatory_options, **_optional_options)
+
+
+class RegularRoutine(Routine):
+    tag = "USER"
+    type = "regular"
+
+    def __init__(self, options):
+        super().__init__(options)
+        self._live_tracking = self._options["live_tracking"]
+        self._rfunction = RoutineFunction(self.name)
+        self._make_rfunction_partial()
+        self._output = self._options["output"]
+        self._overwrite = self._rfunction.overwrite_psi
 
     def __call__(self, system: System) -> tuple[str, Any]:
-        result = self._rfunction_partial(system.psi)
-        if self._rfunction.overwrite_psi:
+        pos_args = (system.psi, *system.positional_args)
+        result = self._rfunction_partial(*pos_args)
+        if self._overwrite:
             system.psi = result
-        if not self.options["output"]:
+        if not self._output:
             return
         if result is not None:
             return (self.store_token, result)
         return
 
-    def _get_external_kwargs(self):
-        for key, kwarg in self.kwargs.items():
-            if kwarg == "EXTERNAL":
-                self.kwargs[key] = self._node.external_options[self.name][key]
-        return
-
-    def _get_mandatory_key(self, key):
-        try:
-            option = self._node.options[key]
-        except KeyError:
-            option = self._schedule.get_global_option(key)
-        return option
-
-    def _get_optional_key(self, key):
-        try:
-            return self._node.options[key]
-        except KeyError:
-            return
-
-    def _set_mandatory_options(self):
-        self._mandatory_options = {}
-        for key, dtype in self._MANDATORY_KWORDS.items():
-            try:
-                option = self._get_mandatory_key(key)
-            except KeyError:
-                raise KeyError(f"Missing mandatory routine option {key}")
-
-            if not isinstance(option, dtype):
-                raise TypeError(f"Routine option {key} has wrong type.")
-            self._mandatory_options[key] = option
-
-    def _set_optional_options(self):
-        self._optional_options = dict(self._OPTIONAL_KWORDS)
-        for key in self._OPTIONAL_KWORDS:
-            option = self._get_optional_key(key)
-            if option is not None:
-                self._optional_options[key] = option
-
-    def _make_rfunction_partial(self) -> Callable:
-        """Sets all parameters of the function except for 'psi'"""
-        args = ()
-        for key in self._rfunction.positional_args.keys():
-            if key == "psi":
-                continue
-            args += (FrozenDict(self.options[key]),)
-
-        # all other arguments are passed as kwargs
-        kwargs: dict = FrozenDict(self.options["kwargs"])
-
-        for key in kwargs.keys():
-            if key in self._rfunction.mandatory_args.keys():
-                continue
-            if key in self._rfunction.optional_args.keys():
-                continue
-            raise ValueError(
-                f"Unknown keyword argument '{key}' found in {self._node}")
-
-        partial_sig = self._rfunction.signature
-
-        if "psi" not in partial_sig.parameters:
-            bound_arguments = partial_sig.bind(*args, **kwargs)
-            bound_arguments.apply_defaults()
-
-            return lambda _: self._rfunction(*bound_arguments.args,
-                                             **bound_arguments.kwargs)
-
-        else:
-            partial_parameters = [partial_sig.parameters[param] for param
-                                  in partial_sig.parameters if param != "psi"]
-            partial_sig = partial_sig.replace(parameters=partial_parameters)
-            bound_arguments = partial_sig.bind(*args, **kwargs)
-            bound_arguments.apply_defaults()
-
-            return lambda psi: self._rfunction(psi, *bound_arguments.args,
-                                               **bound_arguments.kwargs)
-
     @property
-    def _raw_store_token(self):
-        return self._optional_options["store_token"]
-
-    @property
-    def kwargs(self) -> dict:
-        try:
-            return self._mandatory_options["kwargs"]
-        except KeyError:
-            return
+    def live_tracking(self):
+        return self._live_tracking
 
     @property
     def name(self):
-        return self._mandatory_options["routine_name"]
+        return self._options["routine_name"]
 
     @property
-    def stage_idx(self):
-        return self._node.parent_of_rank(1).ID.local + 1
+    def passed_args(self) -> list | tuple:
+        return self._options["args"]
+
+    @property
+    def passed_kwargs(self) -> dict:
+        return self._options["kwargs"]
 
     @property
     def store_token(self):
-        if self._raw_store_token != "":
-            return self._raw_store_token
+        if self._options["store_token"] is not None:
+            return self._options["store_token"]
         else:
             return self.name
 
+    def _check_kwargs(self):
+        """Check for unknown keyword arguments."""
+        unknown = set()
+        for key in self.passed_kwargs:
+            if key not in self._rfunction.kwargs:
+                unknown.add(key)
+        if any(unknown):
+            raise RoutineInitializationError(
+                f"Unknown keyword arguments: {unknown}.")
+        return
+
+    def _make_rfunction_partial(self) -> Callable:
+        """Set all parameters of the function except for positional-only."""
+        self._check_kwargs()
+        rf_sig = self._rfunction.signature
+        rf_params = rf_sig.parameters
+
+        pos_args = [
+            param for param in rf_params.values() if
+            param.kind == param.POSITIONAL_ONLY
+        ]
+        self._n_pos_args = len(pos_args)
+        kw_params = [
+            param for key, param in rf_params.items() if key not in
+            self._rfunction.positional_args
+            ]
+
+        partial_sig = rf_sig.replace(parameters=kw_params)
+        bound_arguments = partial_sig.bind_partial(**self.passed_kwargs)
+        bound_arguments.apply_defaults()
+        self._rfunction_partial = functools.partial(
+            self._rfunction, *bound_arguments.args, **bound_arguments.kwargs)
+
     def disable_live_tracking(self):
-        self.live_tracking = False
+        self._live_tracking = False
 
     def enable_live_tracking(self):
-        self.live_tracking = True
+        self._live_tracking = True
 
 
 class EvolutionRegularRoutine(RegularRoutine):
-    _MANDATORY_KWORDS = keywords._EVO_ROUTINE_KEYWORDS_MANDATORY
+    tag = "USER"
+    type = "evolution"
 
 
-class PropagationRoutine:
-    """Class for time propagation steps of the state."""
-    _ROUTINE_MANDATORY_KEYS = ("name", "step")
-    _TYPE = "PROPAGATE"
+class MonitoringRoutine(RegularRoutine):
+    tag = "MONITORING"
+    type = "monitoring"
+
+
+class PropagationRoutine(Routine):
+    tag = "PROPAGATION"
+    type = "propagation"
     live_tracking = False
     store_token = "PROPAGATE"
 
-    def __init__(self, timestep, stage_idx):
-        self.timestep = timestep
-        self.stage_idx = stage_idx
+    def __init__(self, options):
+        super().__init__(options)
 
     def __call__(self, system: System):
-        system.propagate(self.timestep)
+        system.propagate(self._options["step"])
         return
+
+    @property
+    def timestep(self):
+        return self._options["step"]

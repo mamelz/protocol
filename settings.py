@@ -1,43 +1,282 @@
 """General library settings."""
 import os
-from types import FunctionType
 
 
 _FUNCTIONS_PATH = os.getenv("PROTOCOL_FUNCTIONS_PATH")
+_GRAPH_CONFIG_DICT = {
+    "ranks": {
+        "Schedule": {
+            "default": {
+                "mandatory": {},
+                "optional": {
+                    "global_options": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "stages": {
+                        "types": (list,),
+                        "default": {}
+                    },
+                    "start_time": {
+                        "types": (float,),
+                        "default": 0.0
+                    }
+                }
+            }
+        },
+        "Stage": {
+            "regular": {
+                "mandatory": {},
+                "optional": {
+                    "global_options": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "tasks": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                }
+            },
+            "evolution": {
+                "mandatory": {
+                    "propagation_time": {
+                        "types": (float,)
+                    },
+                },
+                "optional": {
+                    "global_options": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "monitoring": {
+                        "types": (list,),
+                        "default": []
+                    },
+                    "tasks": {
+                        "types": (list,),
+                        "default": []
+                    }
+                },
+                "optional-exclusive": [
+                    {
+                        "monitoring_stepsize": {
+                            "types": (float,),
+                            "default": None
+                        }
+                    },
+                    {
+                        "monitoring_numsteps": {
+                            "types": (int,),
+                            "default": None
+                        }
+                    }
+                ]
+            }
+        },
+        "Task": {
+            "default": {
+                "mandatory": {},
+                "optional": {
+                    "global_options": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "routines": {
+                        "types": (list,),
+                        "default": []
+                    }
+                }
+            }
+        },
+        "Routine": {
+            "regular": {
+                "mandatory": {
+                    "routine_name": {
+                        "types": (str,),
+                    }
+                },
+                "optional": {
+                    "args": {
+                        "types": (list,),
+                        "default": None
+                    },
+                    "description": {
+                        "types": (str,),
+                        "default": None
+                    },
+                    "kwargs": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "live_tracking": {
+                        "types": (bool,),
+                        "default": False
+                    },
+                    "output": {
+                        "types": (bool,),
+                        "default": True
+                    },
+                    "store_token": {
+                        "types": (str,),
+                        "default": None
+                    },
+                    "TYPE": {
+                        "types": (str,),
+                        "default": None
+                    }
+                }
+            },
+            "evolution": {
+                "mandatory": {
+                    "routine_name": {
+                        "types": (str,),
+                    },
+                    "time": {
+                        "types": (float,),
+                    }
+                },
+                "optional": {
+                    "args": {
+                        "types": (list,),
+                        "default": None
+                    },
+                    "description": {
+                        "types": (str,),
+                        "default": None
+                    },
+                    "kwargs": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "live_tracking": {
+                        "types": (bool,),
+                        "default": False
+                    },
+                    "output": {
+                        "types": (bool,),
+                        "default": True
+                    },
+                    "store_token": {
+                        "types": (str,),
+                        "default": None
+                    },
+                    "TYPE": {
+                        "types": (str,),
+                        "default": None
+                    }
+                }
+            },
+            "monitoring": {
+                "mandatory": {
+                    "routine_name": {
+                        "types": (str,)
+                    }
+                },
+                "optional": {
+                    "args": {
+                        "types": (list,),
+                        "default": None
+                    },
+                    "description": {
+                        "types": (str,),
+                        "default": None
+                    },
+                    "kwargs": {
+                        "types": (dict,),
+                        "default": {}
+                    },
+                    "live_tracking": {
+                        "types": (bool,),
+                        "default": False
+                    },
+                    "output": {
+                        "types": (bool,),
+                        "default": True
+                    },
+                    "store_token": {
+                        "types": (str,),
+                        "default": None
+                    },
+                }
+            },
+            "propagation": {
+                "mandatory": {
+                    "step": {
+                        "types": (float,)
+                    }
+                },
+                "optional": {
+                    "TYPE": {
+                        "types": (str,),
+                        "default": None
+                    }
+                }
+            }
+        }
+    },
+    "hierarchy": {
+        0: "Schedule",
+        1: "Stage",
+        2: "Task",
+        3: "Routine"
+    },
+    "allowed_types": {
+        "NONE": {
+            "NONE": {
+                "Schedule"
+            }
+        },
+        "Schedule": {
+            "default": {
+                "Stage": ("regular", "evolution"),
+                "Task": ("default",),
+                "Routine": ("regular",)
+            }
+        },
+        "Stage": {
+            "regular": {
+                "Task": ("default",),
+                "Routine": ("regular")
+            },
+            "evolution": {
+                "Task": ("default",),
+                "Routine": ("evolution", "monitoring", "propagation")
+            }
+        },
+        "Task": {
+            "default": {
+                "Routine": ("evolution",
+                            "monitoring",
+                            "propagation",
+                            "regular")
+            }
+        }
+    }
+}
 
 _SETTINGS = {
     "VERBOSE": False,
     "FUNCTIONS_PATH": _FUNCTIONS_PATH,
+    "GRAPH_CONFIG": _GRAPH_CONFIG_DICT
 }
 
 
 class Settings:
     """Class for general library settings."""
-    VERBOSE = False
+    VERBOSE: bool = False
     FUNCTIONS_PATH: str = None
-
-    @classmethod
-    @property
-    def _KEYS(cls):
-        _keys = ()
-        # find class attributes that are not methods
-        for key, att in cls.__dict__.items():
-            if key.startswith("__") or key == "_KEYS":
-                continue
-            if type(att) is FunctionType:   # ignore methods
-                continue
-            _keys += (key,)
-        return _keys
+    GRAPH_CONFIG: dict
 
     def __init__(self, dict: dict):
         self._settings = dict
         self._set_options_from_dict()
-        for key in self._KEYS:
+        for key in self.__annotations__:
             setattr(self, key, self._settings[key])
 
     def _set_options_from_dict(self):
         for key, opt in self._settings.items():
-            if key not in self._KEYS:
+            if key not in self.__annotations__:
                 raise KeyError(f"Unknown settings key '{key}'.")
             setattr(self, key, opt)
         return
@@ -45,7 +284,7 @@ class Settings:
     def check(self):
         """Check if library settings are complete. Returns bool."""
         _missing = ()
-        for key in self._KEYS:
+        for key in self.__annotations__:
             if getattr(self, key) is None:
                 _missing += (key,)
         if len(_missing) > 0:

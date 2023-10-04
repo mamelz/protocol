@@ -45,7 +45,6 @@ class SchedulePreprocessor(PreprocessorABC):
     """Class for preprocessing a schedule of a protocol."""
     def __init__(self, schedule: Schedule, forced_start_time: float = None):
         self._schedule = schedule
-        self._graph_preprocessor = None
         self._forced_start_time = forced_start_time
         self._graph_preprocessor = GraphPreprocessor(
             self._schedule.root, self._schedule.start_time)
@@ -54,7 +53,7 @@ class SchedulePreprocessor(PreprocessorABC):
         if self._forced_start_time is not None:
             self._schedule.set_start_time(self._forced_start_time)
             self._schedule._reinitialize_system()
-        if not self._schedule.system_initialized:
+        if not self._schedule._system_initialized:
             raise RuntimeError("System not initialized.")
 
         if not hasattr(self._schedule._system, "_propagator"):
@@ -75,9 +74,8 @@ class GraphPreprocessor(PreprocessorABC):
     def __init__(self, graph: GraphNode, start_time: float):
         self._graph = graph
         self._start_time = start_time
-        self._stage_preprocessors: tuple[StageNodePreprocessor] = ()
-        for stage in self._graph.children:
-            self._stage_preprocessors += (StageNodePreprocessor(stage),)
+        self._stage_preprocessors = (
+            StagePreprocessor(stage) for stage in self._graph.children)
 
     def run(self):
         start_time = self._start_time
@@ -87,7 +85,7 @@ class GraphPreprocessor(PreprocessorABC):
         return
 
 
-class StageNodePreprocessor(PreprocessorABC):
+class StagePreprocessor(PreprocessorABC):
     """
     Class for preprocessing a stage node. In evolution stages, monitoring and
     propagation routines will automatically be created.
@@ -139,13 +137,14 @@ class StageNodePreprocessor(PreprocessorABC):
         except KeyError:
             monitoring_routines = []
         for routine in monitoring_routines:
-            routine["TYPE"] = "MONITORING"
+            routine["type"] = "MONITORING"
         monitoring_routines = tuple(monitoring_routines)
 
         extra_routine_times = (self._start_time,)
         last_routine_time = None
         for task in self._stage.children:
             for routine in task.children:
+                routine.options["type"] = "evolution"
                 routine_time = routine.options["time"]
                 if routine_time < self._start_time or (
                         routine_time > stage_stop_time):
@@ -174,6 +173,7 @@ class StageNodePreprocessor(PreprocessorABC):
         # Creates options for propagation routine of given stepsize.
         def propagation_routine(timestep: float):
             return {
+                "type": "propagation",
                 "routine_name": "PROPAGATE",
                 "step": timestep,
             }
@@ -234,13 +234,14 @@ class StageNodePreprocessor(PreprocessorABC):
                 prior_time = time
 
         for task in self._stage.children:
-            task.set_children_from_options(new_routines_dict[task.ID])
+            task.add_children_from_options(new_routines_dict[task.ID])
 
         # at end of time evolution, always return state
         self._stage.children[-1].add_children_from_options(
             {"routine_name": "_return_state",
              "store_token": "LAST_STATE",
-             "TYPE": "AUTOMATIC"})
+             "TYPE": "AUTOMATIC",
+             "type": "regular"})
         return stage_stop_time
 
     # TODO

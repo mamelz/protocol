@@ -5,8 +5,8 @@ import sys
 import textwrap
 from typing import Any, Sequence, Union
 
+from . import preprocessor
 from .parser_ import ProtocolConfiguration
-from .preprocessor import ProtocolPreprocessor
 from .schedule import Schedule
 from .routines import PropagationRoutine
 from .utils import FrozenDict
@@ -99,35 +99,35 @@ class Protocol:
             return self._schedules[self._label_map[identifier]]
         raise TypeError("Invalid identifier type.")
 
-    def _perform_schedule(self, id):
+    def _perform_schedule(self, schedule_id):
         """Perform particular schedule."""
         if isinstance(self._results, FrozenDict):
             self._results = dict(self._results)
 
-        schedule: Schedule = self._get_schedule(id)
-        if isinstance(id, str):
-            schedule_idx = self._label_map[id]
+        schedule: Schedule = self._get_schedule(schedule_id)
+        if isinstance(schedule_id, str):
+            schedule_idx = self._label_map[schedule_id]
         else:
-            schedule_idx = id
+            schedule_idx = schedule_id
 
-        num_stages = len(schedule.get_rank(1))
+        num_stages = len(list(schedule.root.get_generation(1)))
         assert isinstance(schedule, Schedule)
-        for i, routine in enumerate(schedule.routines):
+        for i, routine in enumerate(schedule._routines):
             stage_idx = routine.stage_idx
 
             if isinstance(routine, PropagationRoutine):
                 prop_string = f"PROPAGATE BY {routine.timestep:3.4f}"
                 name_string = (f">>>>>>>>>> {prop_string:^29} >>>>>>>>>>")
             else:
-                name_string = (f"{routine._TYPE:>10}"
+                name_string = (f"{routine.tag:>10}"
                                f" {routine.store_token:<20}")
             schedule_name = schedule_idx + 1 if schedule.label is None else (
                 f"'{schedule.label}'")
             text_prefix = " | ".join([
                 f"SCHEDULE {schedule_name:>6}:",
                 f"STAGE {stage_idx:>3}/{num_stages:<3}",
-                f"ROUTINE {i + 1:>{len(str(len(schedule.routines)))}}"
-                f"/{len(schedule.routines)}",
+                f"ROUTINE {i + 1:>{len(str(len(schedule._routines)))}}"
+                f"/{len(schedule._routines)}",
                 f"TIME {f'{schedule._system.time:.4f}':>10}",
                 f"{name_string}"])
             textwrapper = textwrap.TextWrapper(width=250,
@@ -212,8 +212,8 @@ class Protocol:
             raise ValueError("Protocol must be initialized, first.")
 
         for schedule in self._schedules:
-            schedule.make_routines()
-            for routine in schedule.routines:
+            schedule._make_routines()
+            for routine in schedule._routines:
                 if routine.store_token in self._live_tracking:
                     routine.enable_live_tracking()
         self._finalized = True
@@ -304,7 +304,9 @@ class Protocol:
                 raise ValueError(
                     f"System of schedule {id} is not initialized.")
 
-        ProtocolPreprocessor(self, forced_start_time=forced_start_time).run()
+        for sched in self._schedules:
+            preprocessor.main(sched.root)
+
         self._initialized = True
         return
 
