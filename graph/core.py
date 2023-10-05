@@ -420,10 +420,8 @@ class GraphRoot(GraphNode, metaclass=GraphNodeMeta):
                 break
         if only_leafs:      # only reconstructing the parents is sufficient
             for par in self._mutated_nodes_ids:
-                print({par: self.goto(par)})
                 self._map.update(self.goto(par)._local_map())
         else:               # need to reconstruct all entries
-            print(self._mutated_nodes_ids)
             self._make_map()
         self._mutated_nodes_ids = set()
 
