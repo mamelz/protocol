@@ -133,34 +133,6 @@ class Routine(ABC):
     def stage_idx(self, new):
         self._stage_idx = new
 
-#    def _set_options(self, options):
-#        """Write all options in ._options."""
-#        _mandatory_options = {}
-#        for key in self._spec.options.mandatory:
-#            _mandatory_options[key] = options[key]#
-
-#        for exgroup in self._spec.options.mandatory_exclusive:
-#            for key in exgroup:
-#                try:
-#                    _mandatory_options[key] = options[key]
-#                except KeyError:
-#                    continue#
-
-#        _optional_options = {}
-#        for key, default in self._spec.options.optional.items():
-#            try:
-#                _optional_options[key] = options[key]
-#            except KeyError:
-#                _optional_options[key] = default#
-
-#        for exgroup in self._spec.options.optional_exclusive:
-#            for key, default in exgroup.items():
-#                try:
-#                    _mandatory_options[key] = options[key]
-#                except KeyError:
-#                    _mandatory_options[key] = default
-#        self._options = dict(_mandatory_options, **_optional_options)
-
 
 class RegularRoutine(Routine):
     tag = "USER"
