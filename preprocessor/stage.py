@@ -63,7 +63,7 @@ def process_evolution(stage: GraphNode):
         {"routine_name": "_return_state",
          "time": stop_time,
          "store_token": "LAST_STATE",
-         "TYPE": "AUTOMATIC",
+         "tag": "AUTOMATIC",
          "type": "evolution"})
 
     return stop_time

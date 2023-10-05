@@ -99,7 +99,7 @@ _GRAPH_CONFIG_DICT = {
                 "optional": {
                     "args": {
                         "types": (list,),
-                        "default": None
+                        "default": ()
                     },
                     "description": {
                         "types": (str,),
@@ -121,7 +121,7 @@ _GRAPH_CONFIG_DICT = {
                         "types": (str,),
                         "default": None
                     },
-                    "TYPE": {
+                    "tag": {
                         "types": (str,),
                         "default": None
                     }
@@ -139,7 +139,7 @@ _GRAPH_CONFIG_DICT = {
                 "optional": {
                     "args": {
                         "types": (list,),
-                        "default": None
+                        "default": ()
                     },
                     "description": {
                         "types": (str,),
@@ -161,7 +161,7 @@ _GRAPH_CONFIG_DICT = {
                         "types": (str,),
                         "default": None
                     },
-                    "TYPE": {
+                    "tag": {
                         "types": (str,),
                         "default": None
                     }
@@ -176,7 +176,7 @@ _GRAPH_CONFIG_DICT = {
                 "optional": {
                     "args": {
                         "types": (list,),
-                        "default": None
+                        "default": ()
                     },
                     "description": {
                         "types": (str,),

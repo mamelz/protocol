@@ -128,7 +128,7 @@ class NodePreprocessor:
         match self._node.rank:
             case 0:     # schedule
                 for routine in self._node.leafs:
-                    routine._options["TYPE"] = "USER"
+                    routine._options["tag"] = "USER"
             case 1:     # stage
                 if self._node.type == "evolution":
                     for routine in self._node.leafs:
