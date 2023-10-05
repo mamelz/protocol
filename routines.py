@@ -1,13 +1,12 @@
 """Module implementing routines: Callables to be invoked in the calculation."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
     from .schedule import System
 
 import importlib.util
-import functools
 import os
 from abc import ABC, abstractmethod
 from inspect import signature, Parameter
@@ -72,34 +71,6 @@ class RoutineFunction:
         }
 
     @property
-    def mandatory_args(self) -> dict:
-        """Return all parameters that have no default values."""
-        result = {}
-        for key, param in self._params_of_kind(
-                Parameter.POSITIONAL_OR_KEYWORD).items():
-            if param.default == Parameter.empty:
-                result[key] = param
-        for key, param in self._params_of_kind(
-                Parameter.KEYWORD_ONLY).items():
-            if param.default == Parameter.empty:
-                result[key] = param
-        return result
-
-    @property
-    def optional_args(self) -> dict:
-        """Return all parameters that have default values."""
-        result = {}
-        for key, param in self._params_of_kind(
-                Parameter.POSITIONAL_OR_KEYWORD).items():
-            if param.default != Parameter.empty:
-                result[key] = param
-        for key, param in self._params_of_kind(
-                Parameter.KEYWORD_ONLY).items():
-            if param.default != Parameter.empty:
-                result[key] = param
-        return result
-
-    @property
     def positional_args(self) -> dict:
         return self._params_of_kind(Parameter.POSITIONAL_ONLY)
 
@@ -112,6 +83,7 @@ class Routine(ABC):
     """Callables representing routines to be executed in a schedule."""
     tag: str
     type: str
+    store_token: str
 
     @abstractmethod
     def __init__(self, options: dict):
@@ -138,24 +110,29 @@ class RegularRoutine(Routine):
     tag = "USER"
     type = "regular"
 
-    def __init__(self, options):
+    def __init__(self, options, system: System):
         super().__init__(options)
+        try:
+            tag = self._options["tag"]
+        except KeyError:
+            tag = None
+        if tag is not None:
+            self.tag = self._options["tag"]
+
         self._live_tracking = self._options["live_tracking"]
         self._rfunction = RoutineFunction(self.name)
-        self._make_rfunction_partial()
+        self._make_rfunction_partial(system.positional_args)
         self._output = self._options["output"]
         self._overwrite = self._rfunction.overwrite_psi
 
-    def __call__(self, system: System) -> tuple[str, Any]:
-        pos_args = (system.psi, *system.positional_args)
-        result = self._rfunction_partial(*pos_args)
+    def __call__(self, system):
+        result = self._rfunction_partial(system.psi)
         if self._overwrite:
             system.psi = result
         if not self._output:
             return
-        if result is not None:
-            return (self.store_token, result)
-        return
+
+        return (self.store_token, result)
 
     @property
     def live_tracking(self):
@@ -191,8 +168,8 @@ class RegularRoutine(Routine):
                 f"Unknown keyword arguments: {unknown}.")
         return
 
-    def _make_rfunction_partial(self) -> Callable:
-        """Set all parameters of the function except for positional-only."""
+    def _make_rfunction_partial(self, system_pargs: dict) -> Callable:
+        """Set all parameters of the function except for psi."""
         self._check_kwargs()
         rf_sig = self._rfunction.signature
         rf_params = rf_sig.parameters
@@ -201,17 +178,38 @@ class RegularRoutine(Routine):
             param for param in rf_params.values() if
             param.kind == param.POSITIONAL_ONLY
         ]
-        self._n_pos_args = len(pos_args)
-        kw_params = [
-            param for key, param in rf_params.items() if key not in
-            self._rfunction.positional_args
-            ]
+        args = [
+            param for param in rf_params.values() if
+            param.kind == param.VAR_POSITIONAL
+        ]
+        kwargs = [
+            param for param in rf_params.values() if
+            param.kind not in (param.VAR_POSITIONAL,
+                               param.POSITIONAL_ONLY)
+        ]
 
-        partial_sig = rf_sig.replace(parameters=kw_params)
-        bound_arguments = partial_sig.bind_partial(**self.passed_kwargs)
-        bound_arguments.apply_defaults()
-        self._rfunction_partial = functools.partial(
-            self._rfunction, *bound_arguments.args, **bound_arguments.kwargs)
+        pos_sig = rf_sig.replace(parameters=pos_args)
+        non_pos_sig = rf_sig.replace(parameters=(*args, *kwargs))
+        bound_params = non_pos_sig.bind(*self.passed_args,
+                                        **self.passed_kwargs)
+
+        bind_pargs = []
+        pass_sys_pargs = []
+        for param in pos_sig.parameters.values():
+            if param.name != "psi":
+                bind_pargs += [param]
+                pass_sys_pargs += [system_pargs[param.name]]
+
+        pos_sig = pos_sig.replace(parameters=bind_pargs)
+        bound_pargs = pos_sig.bind(*pass_sys_pargs)
+
+        # @functools.wraps(self._rfunction)
+        def rfunction_partial(psi):
+            return self._rfunction(psi, *bound_pargs.args,
+                                   *bound_params.args,
+                                   **bound_params.kwargs)
+
+        self._rfunction_partial = rfunction_partial
 
     def disable_live_tracking(self):
         self._live_tracking = False

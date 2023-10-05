@@ -11,6 +11,7 @@ from typing import Any, Sequence
 from .graph import GraphNode, GraphNodeID, GraphNodeNONE
 from .interface import Propagator
 from .routines import (
+    Routine,
     EvolutionRegularRoutine,
     MonitoringRoutine,
     PropagationRoutine,
@@ -30,7 +31,7 @@ class System:
 
     def __init__(self, start_time: float,
                  initial_state,
-                 positional_args: tuple = (),
+                 positional_args: dict = {},
                  propagator: Propagator = None):
         """Construct new physical system.
 
@@ -41,10 +42,8 @@ class System:
         Args:
             start_time (float): The start time of the system.
             initial_state (Any): The initial state.
-            positional_args (tuple): Tuple containing additional positional
-                arguments for routines. The first positional argument is always
-                the quantum state itself if the routine needs system
-                information, at all.
+            positional_args (dict): Dictionary containing additional positional
+                arguments for routines.
             propagator (Propagator, optional): An instance of the Propagator
                 interface. Defaults to None.
 
@@ -88,7 +87,7 @@ class Schedule:
             self.label = self.root._options["label"]
         except KeyError:
             self.label = None
-        self._routines = ()
+        self._routines: tuple[Routine] = ()
         self.results: dict[str, dict[float, Any]] = {}
         self._system_initialized = False
 
@@ -148,26 +147,11 @@ class Schedule:
             print(f"Node with ID {id_key.tuple} not in graph.")
             return None
 
-#    def get_node_from_tuple(self, ID_tuple: tuple) -> GraphNode:
-#        """Returns node with given tuple as ID.tuple, if it exists"""
-#        ID = GraphNodeID(ID_tuple)
-#        return self.get_node(ID)
-
-#    def get_rank(self, rank: int) -> tuple[GraphNode]:
-#        """Return all nodes with given rank. 'rank' -1 returns the leafs"""
-#        if rank == -1:
-#            rank = self.depth - 1
-#
-#        def filter_func(node: GraphNode) -> bool:
-#            return node.ID.rank == rank
-#
-#        return tuple(filter(filter_func, self._map.values()))
-
     def get_system_parameters(self):
         """Return system parameters."""
         return self._system.parameters
 
-    def initialize_system(self, initial_state, positional_args: tuple = (),
+    def initialize_system(self, initial_state, positional_args: dict = {},
                           propagator: Propagator = None):
         """Initialize the physical system of the schedule.
 
@@ -191,42 +175,33 @@ class Schedule:
         if not self._system_initialized:
             raise ValueError("System must be initialized, first."
                              " Call .initialize_system().")
-
-        for node in self.leafs:
+        system = self._system
+        routines = [None]*len(self.leafs)
+        for i, node in enumerate(self.leafs):
             stage_idx = node.parent_of_rank(1).ID.local + 1
             match node.type:
                 case "propagation":
                     routine = PropagationRoutine(node._options)
                     routine.stage_idx = stage_idx
-                    self._routines += (routine,)
+                    routines[i] = routine
+                    # self._routines += (routine,)
                 case "evolution":
-                    routine = EvolutionRegularRoutine(node._options)
+                    routine = EvolutionRegularRoutine(node._options, system)
                     routine.stage_idx = stage_idx
-                    self._routines += (routine,)
+                    routines[i] = routine
+                    # self._routines += (routine,)
                 case "monitoring":
-                    routine = MonitoringRoutine(node._options)
+                    routine = MonitoringRoutine(node._options, system)
                     routine.stage_idx = stage_idx
-                    self._routines += (routine,)
+                    routines[i] = routine
+                    # self._routines += (routine,)
                 case "regular":
-                    routine = RegularRoutine(node._options)
+                    routine = RegularRoutine(node._options, system)
                     routine.stage_idx = stage_idx
-                    self._routines += (routine,)
+                    routines[i] = routine
+                    # self._routines += (routine,)
 
-#    def replace_node(self, ID: GraphNodeID, options: dict) -> None:
-#        """Replaces node in the graph, updating the parents' children."""
-#        parent = self._map[ID].parent
-#        n_children = parent.num_children
-#        # temporarily truncate children attribute of parent
-#        # for creation of node with correct ID
-#        parent_children = list(parent.children)
-#        parent.children = list(parent.children)[:ID.local]
-#        new_node = GraphNode(parent, options)
-#        self._map[ID] = new_node
-#        # replace node in original children attribute of parent
-#        parent_children[ID.local] = new_node
-#        assert len(parent_children) == n_children
-#        # put new children back into parent node
-#        parent.children = tuple(parent_children)
+        self._routines = tuple(routines)
 
     def set_external_kwargs(self, kwargs: dict):
         """
