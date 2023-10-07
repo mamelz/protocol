@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..graph.core import GraphNode
 
+import itertools
+
 import numpy as np
 
 from .errors import (
@@ -160,11 +162,15 @@ def _make_new_routines_dict(stage: GraphNode, tsteps, mon_routs,
             _first_loop_token = False
 
     # create remaining timesteps in last task
-    last_task_id = stage.children[-1].ID
-    for time in tsteps:
-        new_routines_dict[last_task_id] += (
-            propagation_routine(time - prior_time),)
-        new_routines_dict[last_task_id] += mon_routs
-        prior_time = time
+    def delta_t_gen():
+        nonlocal prior_time
+        for time in tsteps:
+            yield time - prior_time
+            prior_time = time
+
+    remaining_routs_gen = ((propagation_routine(delta_t), *mon_routs)
+                           for delta_t in delta_t_gen())
+    new_routines_dict[stage.children[-1].ID] += tuple(
+        itertools.chain.from_iterable(remaining_routs_gen))
 
     return new_routines_dict
