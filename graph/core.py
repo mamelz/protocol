@@ -11,53 +11,62 @@ import functools
 import json
 from collections import UserDict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from typing import Mapping
+
+import numpy as np
 
 from . import GRAPH_CONFIG
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GraphNodeID:
     """Unique ID for nodes of the graph."""
-    _tuple: tuple
+    tuple: tuple
+    local: int = field(init=False)
+    rank: int = field(init=False)
+
+    def __post_init__(self):
+        try:
+            object.__setattr__(self, "local", self.tuple[-1])
+        except IndexError:
+            object.__setattr__(self, "local", None)
+        object.__setattr__(self, "rank", len(self.tuple) - 1)
 
     def __iter__(self):
-        return iter(self._tuple)
+        return iter(self.tuple)
 
     def __repr__(self):
-        return f"ID {self._tuple}"
+        return f"ID {self.tuple}"
 
     def __str__(self):
         return f"{self.tuple}"
-
-    @functools.cached_property
-    def tuple(self):
-        return self._tuple
-
-    @functools.cached_property
-    def local(self):
-        """
-        The index of the node in the local tree, i.e. the index
-        in the parent's children list.
-        """
-        return self.tuple[-1]
-
-    @functools.cached_property
-    def parent(self):
-        """ID of the parent node."""
-        return GraphNodeID(self.tuple[:-1])
-
-    @functools.cached_property
-    def rank(self):
-        return len(self.tuple) - 1
 
 
 NoneID = GraphNodeID(())
 
 
-class GraphNodeMeta(type):
+@dataclass(frozen=True)
+class GraphNodeNONE:
+    """Dummy node acting as parent for the root."""
+    children = ()
+    ID: GraphNodeID = GraphNodeID(())
+    num_children = 0
+    rank: int = -1
+    type = "NONE"
+
+    def __init__(self, *_):
+        pass
+
+    def __repr__(self) -> str:
+        return f"NONE: {self.ID}"
+
+    def rank_name(self):
+        return "NONE"
+
+
+class _GraphNodeMeta(type):
     """Meta class for creation of node classes."""
     _CONFIG = GRAPH_CONFIG
 
@@ -78,7 +87,7 @@ class GraphNodeMeta(type):
         bases = (GraphNode,) if rank != 0 else (GraphRoot,)
         return super().__new__(mcls, cls_name, bases, attrs)
 
-    def __call__(cls: GraphNodeMeta,
+    def __call__(cls: _GraphNodeMeta,
                  parent: GraphNode | GraphNodeNONE,
                  options: Mapping):
         rank = parent.rank + 1
@@ -87,15 +96,15 @@ class GraphNodeMeta(type):
         name = cls.__name__
         bases = cls.__bases__
         attrs = {}
-        cls = GraphNodeMeta.__new__(GraphNodeMeta, name, bases, attrs,
-                                    rank=rank)
+        cls = _GraphNodeMeta.__new__(_GraphNodeMeta, name, bases, attrs,
+                                     rank=rank)
         obj: GraphNode = cls.__new__(cls, parent, options)
 #        obj._RANK = rank
         cls.__init__(obj, parent, options)
         return obj
 
 
-class GraphNode(metaclass=GraphNodeMeta):
+class GraphNode(metaclass=_GraphNodeMeta):
     """Base class for nodes of the graph."""
     @classmethod
     def rank_name(cls, rank=None) -> str:
@@ -117,7 +126,7 @@ class GraphNode(metaclass=GraphNodeMeta):
         self._options = options
         if not self.isleaf:
             try:
-                self.__children = tuple(
+                self.__children = NodeChildren(
                     GraphNode(self, opts) for opts in self._options[
                         f"{self.rank_name(self.rank + 1).lower()}s"])
             except KeyError:
@@ -126,11 +135,6 @@ class GraphNode(metaclass=GraphNodeMeta):
     def __iter__(self):
         """Iterator cycling through all nodes of local graph."""
         return iter(self.map.values())
-#        self.__it = iter(self._it)
-#        return self
-
-#    def __next__(self):
-#        return next(self.__it)
 
     def __repr__(self) -> str:
         return f"{self.rank_name(self.rank).capitalize()}: {self.ID}"
@@ -141,7 +145,7 @@ class GraphNode(metaclass=GraphNodeMeta):
 
     @_children.setter
     def _children(self, new_ch):
-        self.__children = new_ch
+        self.__children = NodeChildren(new_ch)
         self.root.register_children_mutation(self)
 
     @property
@@ -200,7 +204,7 @@ class GraphNode(metaclass=GraphNodeMeta):
     @property
     def ID(self) -> GraphNodeID:
         parent = self.parent
-        if parent.ID == NoneID:
+        if parent.ID.local is None:
             return GraphNodeID((0,))
         return GraphNodeID(
             (*parent.ID.tuple, parent.children.index(self)))
@@ -370,7 +374,7 @@ class GraphNode(metaclass=GraphNodeMeta):
         return
 
 
-class GraphRoot(GraphNode, metaclass=GraphNodeMeta):
+class GraphRoot(GraphNode, metaclass=_GraphNodeMeta):
     """Class for the root node of a graph.
 
     Contains the additional attribute ._map and provides functionality to
@@ -440,23 +444,27 @@ class GraphRoot(GraphNode, metaclass=GraphNodeMeta):
         self._mutated_nodes_ids.add(node.ID)
 
 
-@dataclass(frozen=True)
-class GraphNodeNONE:
-    """Dummy node acting as parent for the root."""
-    children = ()
-    ID: GraphNodeID = GraphNodeID(())
-    num_children = 0
-    rank: int = -1
-    type = "NONE"
+class NodeChildren(tuple):
+    """Thin subclass of tuple to store child nodes.
 
-    def __init__(self, *_):
-        pass
+    The purpose of this class is to accelerate the .index() method that is used
+    to infer node IDs in the .ID property of graph nodes. This is achieved by
+    storing the object ids of all child nodes in a np.ndarray and using
+    np.where() to find the index.
+    """
+    def __new__(cls, children_iterable, **tup_kwargs):
+        return super(NodeChildren, cls).__new__(
+            cls, children_iterable, **tup_kwargs)
 
-    def __repr__(self) -> str:
-        return f"NONE: {self.ID}"
+    def __init__(self, children_iterable):
+        self._id_arr = np.array(tuple(id(ch) for ch in self), copy=False)
 
-    def rank_name(self):
-        return "NONE"
+    def __len__(self):
+        return self._id_arr.size
+
+    def index(self, node):
+        """Return index of the given node in the children tuple."""
+        return np.where(self._id_arr == id(node))[0][0]
 
 
 class GraphNodeOptions(UserDict):

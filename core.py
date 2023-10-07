@@ -191,7 +191,7 @@ class Protocol:
         """Duplicate a schedule identified by `schedule_id`.
 
         Args:
-            schedule_id (Union[str, int]): The label or index of an already
+            schedule_id (str | int): The label or index of an already
                 registered schedule.
             system_kwargs (dict): Keyword arguments for the
                 Schedule.initialize_system() method.
