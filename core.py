@@ -140,7 +140,7 @@ class Protocol:
             print(output_text)
             sys.stdout.flush()
 
-            if output is None:
+            if not routine.store:
                 continue
 
             if output[0] not in schedule.results:

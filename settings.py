@@ -113,7 +113,11 @@ _GRAPH_CONFIG_DICT = {
                         "types": (bool,),
                         "default": False
                     },
-                    "output": {
+#                    "output": {
+#                        "types": (bool,),
+#                        "default": True
+#                    },
+                    "store": {
                         "types": (bool,),
                         "default": True
                     },
@@ -153,7 +157,11 @@ _GRAPH_CONFIG_DICT = {
                         "types": (bool,),
                         "default": False
                     },
-                    "output": {
+#                    "output": {
+#                        "types": (bool,),
+#                        "default": True
+#                    },
+                    "store": {
                         "types": (bool,),
                         "default": True
                     },
@@ -190,7 +198,11 @@ _GRAPH_CONFIG_DICT = {
                         "types": (bool,),
                         "default": False
                     },
-                    "output": {
+#                    "output": {
+#                        "types": (bool,),
+#                        "default": True
+#                    },
+                    "store": {
                         "types": (bool,),
                         "default": True
                     },

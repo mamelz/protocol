@@ -81,9 +81,10 @@ class RoutineFunction:
 
 class Routine(ABC):
     """Callables representing routines to be executed in a schedule."""
+    store: bool
+    store_token: str
     tag: str
     type: str
-    store_token: str
 
     @abstractmethod
     def __init__(self, options: dict):
@@ -107,30 +108,25 @@ class Routine(ABC):
 
 
 class RegularRoutine(Routine):
-    tag = "USER"
     type = "regular"
 
     def __init__(self, options, system: System):
         super().__init__(options)
         try:
-            tag = self._options["tag"]
-        except KeyError:
-            tag = None
-        if tag is not None:
             self.tag = self._options["tag"]
+        except KeyError:
+            self.tag = "USER"
 
         self._live_tracking = self._options["live_tracking"]
         self._rfunction = RoutineFunction(self.name)
         self._make_rfunction_partial(system.positional_args)
-        self._output = self._options["output"]
+        self.store = self._options["store"]
         self._overwrite = self._rfunction.overwrite_psi
 
     def __call__(self, system):
         result = self._rfunction_partial(system.psi)
         if self._overwrite:
             system.psi = result
-        if not self._output:
-            return
 
         return (self.store_token, result)
 
@@ -219,19 +215,22 @@ class RegularRoutine(Routine):
 
 
 class EvolutionRegularRoutine(RegularRoutine):
-    tag = "USER"
     type = "evolution"
 
 
 class MonitoringRoutine(RegularRoutine):
-    tag = "MONITORING"
     type = "monitoring"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tag = "MONITORING"
 
 
 class PropagationRoutine(Routine):
     tag = "PROPAGATION"
     type = "propagation"
     live_tracking = False
+    store = False
     store_token = "PROPAGATE"
 
     def __init__(self, options):

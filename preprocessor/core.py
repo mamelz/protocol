@@ -53,14 +53,16 @@ class NodePreprocessor:
         # check if parent determines unique type
         par = self._node.parent
         parent_spec = self._GRAPH_CONFIG.get_specification(par)
-        if len(parent_spec.allowed_types[self._node.rank_name()]) == 1:
+        num_allowed_types = len(parent_spec.allowed_types[
+            self._node.rank_name()])
+        if num_allowed_types == 1:
             node_type = parent_spec.allowed_types[
                 self._node.rank_name()][0]
             return self._GRAPH_CONFIG.rank(
                 self._node.rank_name()).type(node_type)
-
-        raise errors.NodeTypeNotFoundError(
-            f"Node type of node {self._node} could not be determined.")
+        else:
+            raise errors.NodeTypeNotFoundError(
+                f"Node type of node {self._node} could not be determined.")
 
     def _fetch_mandatory_exclusive(self, miss_dict: dict) -> dict:
         """Infer missing exclusive options from parent nodes."""
