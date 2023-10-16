@@ -215,7 +215,7 @@ class Protocol:
             schedule._make_routines()
             for routine in schedule._routines:
                 if routine.store_token in self._live_tracking:
-                    routine.enable_live_tracking()
+                    routine.set_live_tracking(True)
         self._finalized = True
 
     def get_option(self, key: str):

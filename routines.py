@@ -106,6 +106,10 @@ class Routine(ABC):
     def stage_idx(self, new):
         self._stage_idx = new
 
+    def set_live_tracking(self, true_false):
+        raise RuntimeError("Live tracking cannot be set for this"
+                           " routine type.")
+
 
 class RegularRoutine(Routine):
     type = "regular"
@@ -207,11 +211,14 @@ class RegularRoutine(Routine):
 
         self._rfunction_partial = rfunction_partial
 
-    def disable_live_tracking(self):
-        self._live_tracking = False
+    def set_live_tracking(self, true_false: bool):
+        self._live_tracking = true_false
 
-    def enable_live_tracking(self):
-        self._live_tracking = True
+#    def disable_live_tracking(self):
+#        self.set_live_tracking(False)
+
+#    def enable_live_tracking(self):
+#        self.set_live_tracking(True)
 
 
 class EvolutionRegularRoutine(RegularRoutine):

@@ -5,6 +5,10 @@ if not SETTINGS.check():
     raise ValueError("Package not configured yet.")
 
 from .core import Protocol
+from .schedule import Schedule
 
 
-__all__ = ["Protocol"]
+__all__ = [
+    "Protocol",
+    "Schedule"
+    ]
