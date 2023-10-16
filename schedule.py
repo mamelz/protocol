@@ -3,7 +3,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    # from .core import Protocol
     from .graph.core import GraphRoot
 
 import sys
@@ -11,7 +10,7 @@ import textwrap
 import yaml
 from typing import Any, Sequence
 
-from .graph import GraphNode, GraphNodeID, GraphNodeNONE
+from .graph import GraphNode, GraphNodeNONE
 from .interface import Propagator
 from . import preprocessor
 from .routines import (
@@ -81,7 +80,7 @@ class Schedule:
     """Class representing a schedule."""
 
     @classmethod
-    def from_file(cls, yaml_path: str, label: str = None):
+    def from_yaml(cls, yaml_path: str, label: str = None):
         """Construct schedule from path to yaml configuration file.
 
         If the file contains multiple schedule configurations, returns a list
@@ -109,6 +108,7 @@ class Schedule:
 
     def __init__(self, configuration: dict, label: str = None):
         """Construct schedule from configuration dictionary."""
+        self._configuration = configuration
         self._root_node: GraphRoot = GraphNode(GraphNodeNONE(), configuration)
         if label is not None:
             self.label = label
@@ -130,34 +130,12 @@ class Schedule:
         return self._map.values().__str__()
 
     @property
-    def depth(self):
-        """Return the number of ranks in the graph."""
-        node = self._root_node
-        while node.num_children > 0:
-            node = node.children[0]
-
-        return node.rank + 1
-
-    @property
-    def leafs(self) -> tuple[GraphNode]:
-        return self.root.leafs
-
-    @property
     def _map(self):
         return self.root.map
 
     @property
     def _num_stages(self):
         return len(list(self.root.get_generation(1)))
-
-    @property
-    def num_nodes(self):
-        """Amount of nodes in the graph."""
-        return len(self._map)
-
-    @property
-    def options(self) -> dict:
-        return self.root._options
 
     @property
     def root(self) -> GraphRoot:
@@ -179,8 +157,8 @@ class Schedule:
             raise ValueError("System must be initialized, first."
                              " Call .initialize_system().")
         system = self._system
-        routines = [None]*len(self.leafs)
-        for i, node in enumerate(self.leafs):
+        routines = [None]*len(self.root.leafs)
+        for i, node in enumerate(self.root.leafs):
             stage_idx = node.parent_of_rank(1).ID.local + 1
             match node.type:
                 case "propagation":
@@ -211,29 +189,36 @@ class Schedule:
         pos_args = self._system.positional_args
         self.initialize_system(init_state, pos_args, prop)
 
-    def disable_live_tracking(self, routine_names: Sequence[str] | str):
-        """Disable live tracking for the specified routines."""
-        for name in tuple(routine_names):
-            self._live_tracking[name] = False
+    def _set_live_tracking(self, routine_names: Sequence[str],
+                           true_false: bool):
+        if self._ready_for_execution:
+            raise ValueError("Cannot set live tracking after"
+                             " calling .setup().")
 
-    def enable_live_tracking(self, routine_names: Sequence[str] | str):
-        """Enable live tracking for the specified routines."""
-        for name in tuple(routine_names):
-            self._live_tracking[name] = True
+        for name in routine_names:
+            self._live_tracking[name] = true_false
 
-    def get_node(self, node_id: GraphNodeID | tuple) -> GraphNode:
-        """Returns node with given tuple as ID.tuple, if it exists"""
-        if not isinstance(node_id, GraphNodeID):
-            id_key = GraphNodeID(node_id)
-        try:
-            return self._map[id_key]
-        except KeyError:
-            print(f"Node with ID {id_key.tuple} not in graph.")
-            return None
+    def disable_live_tracking(self, routines: Sequence[str] | str):
+        """Disable live tracking for the specified routines.
 
-#    def get_system_parameters(self):
-#        """Return system parameters."""
-#        return self._system.parameters
+        Routines are referred to by their store token. If no store token is
+        set, use the routine name.
+        """
+        if isinstance(routines, str):
+            routines = (routines,)
+
+        self._set_live_tracking(routines, False)
+
+    def enable_live_tracking(self, routines: Sequence[str] | str):
+        """Enable live tracking for the specified routines.
+
+        Routines are referred to by their store token. If no store token is
+        set, use the routine name.
+        """
+        if isinstance(routines, str):
+            routines = (routines,)
+
+        self._set_live_tracking(routines, True)
 
     def initialize_system(self, initial_state, positional_args: dict = {},
                           propagator: Propagator = None):
@@ -298,25 +283,6 @@ class Schedule:
                 self.results[output[0]].update(
                     {self._system.time: output[1]})
 
-    def set_external_kwargs(self, kwargs: dict):
-        """
-        Set external keyword arguments for routines of given name.
-
-        Routines will infer the parameter, if the respective entry in their
-        kwargs dictionary contains the 'EXTERNAL' keyword (case sensitive).
-
-        Args:
-            kwargs (dict): The dictionary specifying the name of the routine
-                and the keyword argument to set. Format of input is:
-                {<function_name>: {<kwarg_name>: <kwarg_value>}}
-        """
-        self._external_kwargs = kwargs
-        self._root_node.options["external"] = self._external_kwargs
-
-#    def set_label(self, label: str):
-#        """Set a label for the schedule."""
-#        self.label = label
-
     def setup(self, start_time=None):
         """Set up the schedule for execution.
 
@@ -345,9 +311,8 @@ class Schedule:
         """Set the positional arguments for routines.
 
         Here, general external information like system parameters can be made
-        available to the routines when calling the functions. The user-defined
-        functions need to take these additional arguments at second position
-        after the quantum state.
+        available to the routines. The user-defined functions need to take
+        these additional arguments at second position after the quantum state.
 
         Args:
             positional_args (tuple): Tuple containing arbitrary data for
