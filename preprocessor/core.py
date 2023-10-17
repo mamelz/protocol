@@ -1,9 +1,9 @@
-from . import GRAPH_CONFIG
-from . import stage
+from . import ConfigurationChecker
 from . import errors
-from ..graph.config import NodeType
-from ..graph.configchecker import ConfigurationChecker
-from ..graph.core import GraphNode, GraphRoot
+from . import GraphNode, GraphRoot
+from . import GRAPH_CONFIG
+from . import NodeType
+from . import stage
 
 
 def main(graph: GraphRoot):
