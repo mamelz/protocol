@@ -150,6 +150,12 @@ class Protocol(_Performable):
         labels = (sch.label for sch in self._schedules)
         return dict(zip(labels, self._schedules))
 
+    def _select_schedules(self, schedule_labels: Sequence[str] = None):
+        if schedule_labels is None:
+            return self._schedules
+        else:
+            return tuple([self._map[label] for label in schedule_labels])
+
     def add_schedule(self, schedule: Schedule):
         """Add a schedule.
 
@@ -178,43 +184,34 @@ class Protocol(_Performable):
                                     source_sched._system._propagator)
         self.add_schedule(new_sched)
 
-    def perform(self, schedule_labels: Sequence[Schedule] = None):
+    def perform(self, schedule_labels: Sequence[str] = None):
         """Perform the specified schedules. By default performs all schedules.
 
         Args:
-            schedule_labels (Sequence[Schedule], optional): Sequence of labels
+            schedule_labels (Sequence[str], optional): Sequence of labels
                 of schedules to be performed. Defaults to None and performs all
                 schedules in that case.
         """
-        if schedule_labels is not None:
-            sch = self._map[schedule_labels]
+        for sch in self._select_schedules(schedule_labels):
+            self_label = f"'{self.label}'"
+            sch._output_str_prefix = f"PROTOCOL {self_label:>6}"
             sch.perform()
-            self.results[schedule_labels] = sch.results
-        else:
-            for sch in self._schedules:
-                sch.perform()
-                self.results[sch.label] = sch.results
+            self.results[sch.label] = sch.results
 
-    def setup(self, schedule_label=None, start_time=None):
+    def setup(self, schedule_labels: Sequence[str] = None,
+              start_time=None):
         """Set up schedules for execution.
 
         If label is given, sets up the specified schedule. Otherwise, sets up
         all schedules.
         Args:
-            schedule_label (str, optional): Label of a schedule.
+            schedule_label (Sequence[str], optional): Label of a schedule.
                 Defaults to None.
             start_time (float, optional): A start time overriding the schedule
                 configuration. Defaults to None.
         """
-        if schedule_label is not None:
-            scheds = (self._map[schedule_label],)
-        else:
-            scheds = self._schedules
-
-        for sch in scheds:
+        for sch in self._select_schedules(schedule_labels):
             sch.setup(start_time)
-            self_label = f"'{self.label}'"
-            sch._output_str_prefix = f"PROTOCOL {self_label:>6}"
 
 
 class Schedule(_Performable):
