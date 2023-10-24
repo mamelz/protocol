@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .schedule import System
+    from .core import _System
 
 import importlib.util
 import os
@@ -95,7 +95,7 @@ class Routine(ABC):
         self._options = options
 
     @abstractmethod
-    def __call__(self, system: System):
+    def __call__(self, system: _System):
         pass
 
     @property
@@ -114,7 +114,7 @@ class Routine(ABC):
 class RegularRoutine(Routine):
     type = "regular"
 
-    def __init__(self, options, system: System):
+    def __init__(self, options, system: _System):
         super().__init__(options)
         try:
             self.tag = self._options["tag"]
@@ -123,7 +123,7 @@ class RegularRoutine(Routine):
 
         self._live_tracking = self._options["live_tracking"]
         self._rfunction = RoutineFunction(self.name)
-        self._make_rfunction_partial(system.positional_args)
+        self._make_rfunction_partial(system.sys_vars)
         self.store = self._options["store"]
         self._overwrite = self._rfunction.overwrite_psi
 
@@ -243,7 +243,7 @@ class PropagationRoutine(Routine):
     def __init__(self, options):
         super().__init__(options)
 
-    def __call__(self, system: System):
+    def __call__(self, system: _System):
         system.propagate(self._options["step"])
         return
 
