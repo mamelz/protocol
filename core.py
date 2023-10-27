@@ -122,7 +122,7 @@ class _System:
 class Protocol(_Performable):
     """A collection of schedules.
     """
-    def __init__(self, schedules: Sequence[Schedule], label: str = "no label"):
+    def __init__(self, schedules: Sequence[Schedule], label: str = None):
         """Construct protocol from the given schedules.
 
         Args:
@@ -135,7 +135,11 @@ class Protocol(_Performable):
             ValueError: Raised, when two or more schedules have the same label.
         """
         super().__init__()
-        self.label = label
+        if label is None:
+            self.label = "no label"
+        else:
+            self.label = label
+
         self._schedules = tuple(schedules)
         schedule_labels = set()
         for sch in self._schedules:
