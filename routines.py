@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .schedule import System
+    from .core import _System
 
 import importlib.util
 import os
@@ -95,7 +95,7 @@ class Routine(ABC):
         self._options = options
 
     @abstractmethod
-    def __call__(self, system: System):
+    def __call__(self, system: _System):
         pass
 
     @property
@@ -106,11 +106,15 @@ class Routine(ABC):
     def stage_idx(self, new):
         self._stage_idx = new
 
+    def set_live_tracking(self, true_false):
+        raise RuntimeError("Live tracking cannot be set for this"
+                           " routine type.")
+
 
 class RegularRoutine(Routine):
     type = "regular"
 
-    def __init__(self, options, system: System):
+    def __init__(self, options, system: _System):
         super().__init__(options)
         try:
             self.tag = self._options["tag"]
@@ -119,7 +123,7 @@ class RegularRoutine(Routine):
 
         self._live_tracking = self._options["live_tracking"]
         self._rfunction = RoutineFunction(self.name)
-        self._make_rfunction_partial(system.positional_args)
+        self._make_rfunction_partial(system.sys_vars)
         self.store = self._options["store"]
         self._overwrite = self._rfunction.overwrite_psi
 
@@ -207,11 +211,14 @@ class RegularRoutine(Routine):
 
         self._rfunction_partial = rfunction_partial
 
-    def disable_live_tracking(self):
-        self._live_tracking = False
+    def set_live_tracking(self, true_false: bool):
+        self._live_tracking = true_false
 
-    def enable_live_tracking(self):
-        self._live_tracking = True
+#    def disable_live_tracking(self):
+#        self.set_live_tracking(False)
+
+#    def enable_live_tracking(self):
+#        self.set_live_tracking(True)
 
 
 class EvolutionRegularRoutine(RegularRoutine):
@@ -236,7 +243,7 @@ class PropagationRoutine(Routine):
     def __init__(self, options):
         super().__init__(options)
 
-    def __call__(self, system: System):
+    def __call__(self, system: _System):
         system.propagate(self._options["step"])
         return
 
