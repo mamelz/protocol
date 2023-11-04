@@ -1,3 +1,5 @@
+from functools import wraps
+
 from . import ConfigurationChecker
 from . import errors
 from . import GraphNode, GraphRoot
@@ -6,31 +8,39 @@ from . import NodeType
 from . import stage
 
 
-def main(graph: GraphRoot):
+def process_graph(graph: GraphRoot):
+    options_proc = NodeOptionsProcessor(GRAPH_CONFIG)
     for node in graph:
-        preproc = NodePreprocessor(node)
-        preproc.process_options()
-
-    for node in graph:
-        preproc = NodePreprocessor(node)
-        preproc.process_routines()
+        options_proc.process(node)
 
     for node in graph:
-        preproc = NodePreprocessor(node)
-        preproc.process_options()
+        options_proc.process_routines(node)
+
+    for node in graph:
+        options_proc.process(node)
 
 
-class NodePreprocessor:
-    _GRAPH_CONFIG = GRAPH_CONFIG
+class NodeOptionsProcessor:
+    """Class that bundles all functionality for processing of node options."""
 
-    def __init__(self, node: GraphNode, node_type: str = None):
-        self._node = node
-        if node_type is not None:
-            self._node.type = node_type
-        self._spec = self._determine_specification()
-        if self._node.type is None:
-            self._node.type = self._spec.type
-        self._checker = ConfigurationChecker(self._spec)
+    @staticmethod
+    def _setup_if_needed(method):
+        @wraps(method)
+        def wrapped(self, node: GraphNode = None,
+                    node_type=None):
+            if node is not None:
+                self._setup_processing(node, node_type)
+            return method(self)
+
+        return wrapped
+
+    def __init__(self, graph_config):
+        self._GRAPH_CONFIG = graph_config
+
+    def _clear(self):
+        del self._node
+        del self._spec
+        del self._checker
 
     def _determine_specification(self) -> NodeType:
         """Determine the specification that applies for the node."""
@@ -109,23 +119,47 @@ class NodePreprocessor:
             self._fetch_optional_nonexclusive(miss_dict)
         )
 
-    def _handle_missing_options(self):
-        """Try to fill in missing options and validate them."""
+    def _setup_processing(self, node: GraphNode, node_type):
+        self._node = node
+        if node_type is not None:
+            self._node.type = node_type
+        self._spec = self._determine_specification()
+        if self._node.type is None:
+            self._node.type = self._spec.type
+        self._checker = ConfigurationChecker(self._spec)
+
+        return
+
+    @_setup_if_needed
+    def check_complete(self):
+        """Check, if all node options are set and valid."""
+        self._checker.check_complete(self._node)
+
+    @_setup_if_needed
+    def fill_missing(self):
+        """Try to fill in missing options."""
         missing_opts = self._spec.options.missing(self._node._options)
         fetched_opts = self._fetch_missing_options(missing_opts)
         self._node._options.update(fetched_opts)
 
-        return
-
-    def process_options(self):
+    @_setup_if_needed
+    def check_valid(self):
+        """Check if any given node options are invalid."""
         self._checker.check_valid(self._node)
-        self._handle_missing_options()
-        self._checker.check_valid(self._node)
-        if not self._checker.check_complete(self._node):
-            raise errors.NodeOptionsError
 
-        return
+    def process(self, node: GraphNode, node_type: str = None):
+        """Process the options of the given node.
 
+        Checks the node for validity and sets missing options to their
+        default values.
+        """
+        self._setup_processing(node, node_type)
+        self.check_valid()
+        self.fill_missing()
+        self.check_complete()
+        self._clear()
+
+    @_setup_if_needed
     def process_routines(self):
         match self._node.rank:
             case 0:     # schedule
@@ -140,5 +174,3 @@ class NodePreprocessor:
                 pass
             case 3:     # routine
                 pass
-
-        return

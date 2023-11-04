@@ -80,13 +80,14 @@ class ConfigurationChecker:
                 with the graph configuration.
         """
         self._check_specification(node)
+
         return
 
     def check_complete(self, node: GraphNode) -> bool:
-        """Check node options for completeness.
+        """Check node options for completeness and validity.
 
-        Returns:
-            bool: True if no options are missing, otherwise False.
+        Raises:
+            NodeTypeError: Raised, when there are missing or invalid options.
         """
         miss_dict = self._spec.options.missing(node._options)
         for keysets in (miss_dict["mandatory_exclusive"] +
@@ -95,9 +96,10 @@ class ConfigurationChecker:
                 if any(miss_set):
                     return False
 
-        for miss_set in (miss_dict["mandatory"] |
-                         miss_dict["optional"]):
+        for miss_set in (miss_dict["mandatory"] | miss_dict["optional"]):
             if any(miss_set):
-                return False
+                raise errors.NodeOptionsError(f"Missing options: {miss_set}")
 
-        return True
+        self.check_valid(node)
+
+        return

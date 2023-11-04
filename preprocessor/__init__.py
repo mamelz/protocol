@@ -8,7 +8,7 @@ from ..graph import GRAPH_CONFIG
 from ..graph.config import NodeType
 from ..graph.configchecker import ConfigurationChecker
 from ..graph.core import GraphNode, GraphRoot
-from .core import main
+from .core import process_graph
 
 
 __all__ = [

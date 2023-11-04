@@ -438,7 +438,7 @@ class Schedule(_Performable):
         if start_time is not None:
             self.start_time = start_time
 
-        preprocessor.main(self.root)
+        preprocessor.process_graph(self.root)
         self._make_routines()
         for rout in self._routines:
             if rout.store_token in self._live_tracking:
