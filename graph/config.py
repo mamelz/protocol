@@ -326,7 +326,7 @@ class GraphSpecification:
             self._ranks[rname] = RankSpecification(rname, rdict, rank_children)
 
     @property
-    def hierarchy(self):
+    def hierarchy(self) -> dict[str, int]:
         return self._hierarchy
 
     @property

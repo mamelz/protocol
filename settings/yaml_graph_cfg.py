@@ -1,4 +1,4 @@
-YAML_GRAPH_CONFIG = {
+YAML_GRAPH_CONFIG_DICT = {
     "ranks": {
         "NONE": {
             "NONE": {}
@@ -251,9 +251,9 @@ YAML_GRAPH_CONFIG = {
         },
         "Task": {
             "default": {
+                "Task": ("default",
+                         "predefined"),
                 "Routine": ("evolution",
-                            "monitoring",
-                            "propagation",
                             "regular")
             },
             "predefined": ()
