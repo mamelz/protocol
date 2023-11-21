@@ -5,22 +5,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import GraphNode
 
-import itertools
 from abc import ABC, abstractmethod
-from collections import UserDict
-from dataclasses import dataclass
 
-
-class NodeConfigurationError(Exception):
-    pass
-
-
-class GraphConfigurationError(Exception):
-    pass
-
-
-class NodeProcessorError(Exception):
-    pass
+from .errors_new import NodeConfigurationError
 
 
 class OptionsABC(dict, ABC):
@@ -330,7 +317,7 @@ class GraphSpecification:
 
     def __init__(self, graph_config: dict):
         if not graph_config.keys() == self._KEYS:
-            raise GraphConfigurationError
+            raise NodeConfigurationError
 
         self._hierarchy = graph_config["hierarchy"]
         self._ranks = {}
@@ -347,22 +334,22 @@ class GraphSpecification:
         return self._ranks
 
 
-class NodeProcessor:
+class NodeConfigurationProcessor:
 
     @classmethod
     def from_dict(cls, config_dict: dict):
         return cls(GraphSpecification(config_dict))
 
-    def __init__(self, configuration: GraphSpecification):
-        self._config = configuration
+    def __init__(self, specification: GraphSpecification):
+        self._spec = specification
 
     def get_specification(self, node: GraphNode
                           ) -> NodeSpecification | tuple(NodeSpecification):
         rankname = node.rank_name()
         if node.type is not None:
-            return self._config.ranks[rankname].types[node.type]
+            return self._spec.ranks[rankname].types[node.type]
 
-        types_dict = self._config.ranks[rankname].types.copy()
+        types_dict = self._spec.ranks[rankname].types.copy()
         impossible_typenames = set()
         for typename, nodetype in types_dict.items():
             try:
@@ -390,9 +377,9 @@ class NodeProcessor:
 
         if len(possible_typenames) == 1:
             typename = next(iter(possible_typenames))
-            return self._config.ranks[rankname].types[typename]
+            return self._spec.ranks[rankname].types[typename]
         elif len(possible_typenames) > 1:
-            return tuple(self._config.ranks[rankname].types[tname]
+            return tuple(self._spec.ranks[rankname].types[tname]
                          for tname in possible_typenames)
         else:
             raise NodeConfigurationError(f"Node {node} has invalid options.")
@@ -439,10 +426,10 @@ class NodeProcessor:
                     continue
 
             if len(matches) > 1:
-                raise NodeProcessorError(
+                raise NodeConfigurationError(
                     f"Ambiguous global options {matches} for node {node}")
             elif not any(matches):
-                raise NodeProcessorError(
+                raise NodeConfigurationError(
                     f"Mandatory exclusive options {group} not found."
                 )
 
@@ -456,7 +443,7 @@ class NodeProcessor:
                     continue
 
             if len(matches) > 1:
-                raise NodeProcessorError(
+                raise NodeConfigurationError(
                     f"Ambiguous global options {matches} for node {node}")
             elif not any(matches):
                 for key in group:
@@ -740,9 +727,3 @@ CFG = {
         }
     }
 }
-
-
-if __name__ == "__main__":
-    graph_config = GraphSpecification(CFG)
-    checker = NodeProcessor(graph_config)
-    checker

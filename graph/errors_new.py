@@ -1,0 +1,2 @@
+class NodeConfigurationError(Exception):
+    pass
