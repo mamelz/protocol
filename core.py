@@ -233,7 +233,7 @@ class Schedule(_Performable):
             label (str, optional): Label for the schedule. Defaults to None.
 
         Returns:
-            Schedule | list[Schedule]: The schedule(s).
+            Schedule | tuple[Schedule]: Schedule or tuple of schedule objects.
         """
         with open(yaml_path, "r") as stream:
             config = yaml.safe_load(stream)
@@ -244,7 +244,10 @@ class Schedule(_Performable):
             sched_cfg = config
 
         if len(sched_cfg) > 1:
-            return [cls(cfg, label) for cfg in sched_cfg]
+            if label is not None:
+                raise ValueError("When mutiple schedules are defined, label"
+                                 " must be None")
+            return (cls(cfg, label) for cfg in sched_cfg)
 
         return cls(sched_cfg[0], label)
 

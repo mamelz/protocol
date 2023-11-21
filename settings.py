@@ -87,6 +87,14 @@ _GRAPH_CONFIG_DICT = {
                         "default": []
                     }
                 }
+            },
+            "predefined": {
+                "mandatory": {
+                    "task_name": {
+                        "types": (str,)
+                    }
+                },
+                "optional": {}
             }
         },
         "Routine": {
@@ -221,7 +229,7 @@ _GRAPH_CONFIG_DICT = {
         2: "Task",
         3: "Routine"
     },
-    "allowed_types": {
+    "allowed_children": {
         "NONE": {
             "NONE": {
                 "Schedule"
@@ -250,7 +258,8 @@ _GRAPH_CONFIG_DICT = {
                             "monitoring",
                             "propagation",
                             "regular")
-            }
+            },
+            "predefined": ()
         }
     }
 }

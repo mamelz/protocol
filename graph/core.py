@@ -60,7 +60,7 @@ class GraphNodeNONE:
         pass
 
     def __repr__(self) -> str:
-        return f"NONE: {self.ID}"
+        return f"NONE_Node: {self.ID}"
 
     def rank_name(self):
         return "NONE"
@@ -476,7 +476,7 @@ class GraphNodeOptions(UserDict):
     def __init__(self, node: GraphNode):
         self._node = node
         super().__init__(self._node._options)
-        self.data = self._node._options
+        self.data: dict = self._node._options
 
     def __getitem__(self, __key: str):
         try:
@@ -490,3 +490,7 @@ class GraphNodeOptions(UserDict):
                 except KeyError:
                     continue
             raise KeyError(f"Option {__key} not found.")
+
+    @property
+    def local(self):
+        return self.data
