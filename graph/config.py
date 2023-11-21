@@ -5,477 +5,455 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .core import GraphNode
 
-import itertools
-from abc import ABC
-from collections import UserDict
-from collections.abc import Mapping
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
-from . import errors
+from .errors import NodeConfigurationError
 
 
-class FrozenDict(Mapping):
-    """
-    Immutable dictionary-like type. Found at:
-    https://stackoverflow.com/questions/2703599/what-would-a-frozen-dict-be
-    """
+class OptionsABC(dict, ABC):
 
-    def __init__(self, *args, **kwargs):
-        self._d = dict(*args, **kwargs)
-        self._hash = None
+    _KEYS: set
+    _KIND: str
 
-    def __iter__(self):
-        return iter(self._d)
+    def __init__(self, node_config: dict):
+        try:
+            dict.__init__(self, node_config[self._KIND])
+        except KeyError:
+            dict.__init__(self, {})
 
-    def __len__(self):
-        return len(self._d)
+        for k, v in self.items():
+            if any(v.keys() - self._KEYS):
+                raise NodeConfigurationError(k)
 
-    def __getitem__(self, key):
-        return self._d[key]
+    @abstractmethod
+    def _verify_option(self, opt_key, opt_val):
+        pass
 
-    def __hash__(self):
-        # It would have been simpler and maybe more obvious to
-        # use hash(tuple(sorted(self._d.iteritems()))) from this discussion
-        # so far, but this solution is O(n). I don't know what kind of
-        # n we are going to run into, but sometimes it's hard to resist the
-        # urge to optimize when it will gain improved algorithmic performance.
-        if self._hash is None:
-            hash_ = 0
-            for pair in self.items():
-                hash_ ^= hash(pair)
-            self._hash = hash_
-        return self._hash
+    def check(self, node_opts: dict):
+        comm_keys = self.keys() & node_opts.keys()
+        if len(comm_keys) == 0:
+            return
+        for key in comm_keys:
+            self._verify_option(key, node_opts[key])
 
-    def __repr__(self):
-        return f"FrozenDict{self._d.__repr__()}"
+    def missing(self, node_opts: dict) -> set[str]:
+        return set(self.keys() - node_opts.keys())
 
 
-class EmptyEntries(FrozenDict):
-    """Class for empty entries."""
-    dict = {}
+class ExclusiveOptionsABC(tuple[dict], ABC):
 
-    def __init__(self):
-        super().__init__({})
+    _KEYS: set
+    _KIND: str
 
-    def missing(self, _: dict) -> set:
-        """Return missing option keys."""
-        return set()
+    def __new__(cls, node_config: dict):
+        try:
+            obj: tuple[str, dict] = tuple.__new__(
+                cls, node_config[cls._KIND])
+        except KeyError:
+            obj: tuple[str, dict] = tuple.__new__(cls, ())
 
-    def check_options(self, _: dict) -> set:
-        """Return invalid and valid option keys."""
-        return (set(), set())
+        for d in obj:
+            if not isinstance(d, dict):
+                raise NodeConfigurationError
+
+            for k, v in d.items():
+                if any(v.keys() - cls._KEYS):
+                    raise NodeConfigurationError
+
+        return obj
+
+    @abstractmethod
+    def _verify_option(self, opt_key, opt_val):
+        pass
+
+    def check(self, node_opts: dict):
+        for group in self:
+            comm_keys = group.keys() & node_opts.keys()
+            if len(comm_keys) > 1:
+                raise NodeConfigurationError("More than one exclusive option.")
+            if len(comm_keys) == 0:
+                return
+
+            key = next(iter(comm_keys))
+            self._verify_option(key, node_opts[key])
+
+    def keys(self) -> set[str]:
+        keys = set()
+        for d in self:
+            keys |= d.keys()
+        return keys
+
+    def missing(self, node_opts: dict) -> tuple[set[str]]:
+        missing_groups = ()
+        for group in self:
+            comm_keys = group.keys() & node_opts.keys()
+            if len(comm_keys) == 0:
+                missing_groups += set(group.keys())
+
+        return missing_groups
 
 
-class MandatoryEntries(FrozenDict):
-    """Dictionary containing mandatory entries."""
-    def __init__(self, options_dict: dict[str, dict]):
-        for d in options_dict.values():
-            for key, value in d.items():
-                if key != "types":
-                    raise ValueError
-                if not all(isinstance(t, type) for t in value):
-                    raise ValueError
-        super().__init__(options_dict)
+class MandatoryOptions(OptionsABC):
 
-    def __str__(self):
-        out = ""
-        for key in self:
-            out += (f"Mandatory key {key}: types {self[key]['types']}\n")
-        return out
+    _KEYS = {"types"}
+    _KIND = "mandatory"
 
-    @property
-    def names(self):
-        return tuple(self._d.keys())
+    def _verify_option(self, opt_key, opt_val):
+        types = self[opt_key]["types"]
+        if not isinstance(opt_val, types):
+            raise NodeConfigurationError(
+                f"Option entry {opt_key} has invalid type.")
 
-    def missing(self, opts: dict) -> set:
-        """Return missing option keys."""
-        return self.keys() - opts.keys()
 
-    def check_options(self, opts: dict) -> tuple[set]:
-        """Return invalid and valid option keys."""
-        invalid_opts = set()
-        valid_opts = set()
-        for key, opt in self.items():
+class MandatoryExclusiveOptions(ExclusiveOptionsABC):
+
+    _KEYS = {"types"}
+    _KIND = "mandatory-exclusive"
+
+    def _verify_option(self, opt_key, opt_val):
+        for g in self:
             try:
-                opts_key = opts[key]
+                types = g[opt_key]["types"]
+                break
             except KeyError:
-                invalid_opts.add(key)
                 continue
-            if not isinstance(opts_key, opt["types"]):
-                invalid_opts.add(key)
-            else:
-                valid_opts.add(key)
-        return (invalid_opts, valid_opts)
+
+        if not isinstance(opt_val, types):
+            raise NodeConfigurationError(
+                f"Option entry {opt_key} has invalid type.")
 
 
-class OptionalEntries(FrozenDict):
-    """Dictionary containing optional entries."""
-    def __init__(self, options_dict: dict):
-        for d in options_dict.values():
-            for key, value in d.items():
-                if key not in ("types", "default"):
-                    raise ValueError
-                if key == "default" and not isinstance(value, object):
-                    raise ValueError
-                if key == "types" and not all(
-                        isinstance(t, type) for t in value):
-                    raise ValueError
-        super().__init__(options_dict)
+class OptionalOptions(OptionsABC):
 
-    def __str__(self):
-        out = ""
-        for key in self:
-            out += (f"Optional key {key}: types {self[key]['types']}\n"
-                    f"                    default {self[key]['default']}\n")
-        return out
+    _KEYS = {"types", "default"}
+    _KIND = "optional"
 
-    @property
-    def names(self):
-        return tuple(self._d.keys())
-
-    def missing(self, opts: dict) -> set:
-        """Return missing option keys."""
-        return self.keys() - opts.keys()
-
-    def check_options(self, opts: dict) -> tuple[set]:
-        """Return invalid and valid option keys."""
-        invalid_opts = set()
-        valid_opts = set()
-        for key in opts.keys() & self.keys():
-            if opts[key] == self[key]["default"]:
-                valid_opts.add(key)
-            elif isinstance(opts[key], self[key]["types"]):
-                valid_opts.add(key)
-            else:
-                invalid_opts.add(key)
-        return (invalid_opts, valid_opts)
+    def _verify_option(self, opt_key, opt_val):
+        types = self[opt_key]["types"]
+        default = self[opt_key]["default"]
+        if not (isinstance(opt_val, types) or opt_val == default):
+            raise NodeConfigurationError(
+                f"Option entry {opt_key} has invalid type.")
 
 
-class ExclusiveEntries(ABC, tuple):
+class OptionalExclusiveOptions(ExclusiveOptionsABC):
 
-    @property
-    def dict(self):
-        return {k: v for ent in self for k, v in ent.items()}
+    _KEYS = {"types", "default"}
+    _KIND = "optional-exclusive"
 
-
-class ExclusiveMandatoryEntries(ExclusiveEntries):
-
-    def __new__(cls, exmanent: list) -> tuple[MandatoryEntries]:
-        return super().__new__(
-            ExclusiveMandatoryEntries,
-            list(MandatoryEntries(elem) for elem in exmanent))
-
-    def check_options(self, opts: dict) -> tuple[set]:
-        """Return invalid and valid option keys."""
-        invalid_opts = set()
-        valid_opts = set()
-        for gr in self:
-            if len(gr.keys()) == 0:
+    def _verify_option(self, opt_key, opt_val):
+        for g in self:
+            try:
+                types = g[opt_key]["types"]
+                default = g[opt_key]["default"]
+                break
+            except KeyError:
                 continue
-            common_keys = gr.keys() & opts.keys()
-            if len(common_keys) > 1:
-                raise errors.NodeOptionsError(f"Got multiple exclusive keys:"
-                                              f" {common_keys}")
-            elif len(common_keys) == 0:
-                raise errors.NodeOptionsError(
-                    f"Missing one of options: {gr.keys()}.")
-            key = (gr.keys() & opts.keys())[0]
-            if not isinstance(opts[key], gr[key]["types"]):
-                invalid_opts.add(key)
-            else:
-                valid_opts.add(key)
-        return (invalid_opts, valid_opts)
 
-    def missing(self, opts: dict) -> tuple[set]:
-        """Return missing option keys."""
-        missing = ()
-        for gr in self:
-            gr_missing = gr.missing(opts)
-            if len(gr_missing) < 2:
-                continue
-            missing += (gr_missing,)
-        return missing
+        if not (isinstance(opt_val, types) or opt_val == default):
+            raise NodeConfigurationError(
+                f"Option entry {opt_key} has invalid type.")
 
 
-class ExclusiveOptionalEntries(ExclusiveEntries):
+class NodeOptions:
 
-    def __new__(cls, exoptent: list) -> tuple[OptionalEntries]:
-        return super().__new__(
-            ExclusiveOptionalEntries,
-            list(OptionalEntries(elem) for elem in exoptent))
-
-    def missing(self, opts: dict) -> tuple[set]:
-        """Return missing option keys."""
-        missing = ()
-        for gr in self:
-            gr_missing = gr.missing(opts)
-            if len(gr_missing) < 2:
-                continue
-            missing += (gr_missing,)
-        return missing
-
-    def check_options(self, opts: dict) -> tuple[set]:
-        """Return invalid and valid option keys."""
-        invalid_opts = set()
-        valid_opts = set()
-        for gr in self:
-            common_keys = gr.keys() & opts.keys()
-            if len(common_keys) > 1:
-                raise errors.NodeOptionsError(f"Got multiple exclusive keys:"
-                                              f" {common_keys}")
-            if any(common_keys):
-                key = list(common_keys)[0]
-                if not isinstance(opts[key], gr[key]["types"]):
-                    invalid_opts.add(key)
-                else:
-                    valid_opts.add(key)
-        return (invalid_opts, valid_opts)
-
-
-@dataclass(frozen=True, slots=True)
-class NodeOptions(Mapping):
-    """The options of a particular node type."""
-    mandatory: MandatoryEntries
-    mandatory_exclusive: ExclusiveMandatoryEntries
-    optional: OptionalEntries
-    optional_exclusive: ExclusiveOptionalEntries
-
-    @classmethod
-    def make(cls, options: dict):
-        try:
-            mandatory = MandatoryEntries(options["mandatory"])
-        except KeyError:
-            mandatory = EmptyEntries()
-        try:
-            mandatory_exclusive = ExclusiveMandatoryEntries(
-                options["mandatory-exclusive"])
-        except KeyError:
-            mandatory_exclusive = ExclusiveMandatoryEntries([{}])
-        try:
-            optional = OptionalEntries(options["optional"])
-        except KeyError:
-            optional = EmptyEntries()
-        try:
-            optional_exclusive = ExclusiveOptionalEntries(
-                options["optional-exclusive"])
-        except KeyError:
-            optional_exclusive = ExclusiveMandatoryEntries([{}])
-
-        return cls(
-            mandatory,
-            mandatory_exclusive,
-            optional,
-            optional_exclusive)
-
-    def __getitem__(self, key):
-        return self._all_dict[key]
-
-    def __iter__(self):
-        return iter(self._all_dict)
-
-    def __len__(self):
-        return len(self._all_dict)
+    def __init__(self, mand, mand_ex, opt, opt_ex):
+        self._mand: MandatoryOptions = mand
+        self._mand_ex: MandatoryExclusiveOptions = mand_ex
+        self._opt: OptionalOptions = opt
+        self._opt_ex: OptionalExclusiveOptions = opt_ex
 
     @property
-    def _all_dict(self):
-        return (
-            dict(self.mandatory) |
-            dict(self.optional) |
-            self.mandatory_exclusive.dict |
-            self.optional_exclusive.dict
-            )
-
-    def check_options(self, options: dict) -> tuple[set]:
-        """Return invalid and valid option keys."""
-        _options = options.copy()
-#        if "type" in _options.keys():
-#            del _options["type"]
-        trimmed_options = _options
-        checked_options = {
-            "mandatory": self.mandatory.check_options(trimmed_options),
-            "mandatory_exclusive": self.mandatory_exclusive.check_options(
-                trimmed_options),
-            "optional": self.optional.check_options(trimmed_options),
-            "optional_exclusive": self.optional_exclusive.check_options(
-                trimmed_options)
-        }
-
-        out = [set(), set()]
-        for tup in checked_options.values():
-            out[0] |= tup[0]
-            out[1] |= tup[1]
-
-        return tuple(out)
-
-    def validate_options(self, options: dict) -> bool:
-        """Check if all option keys are known and valid."""
-        checked_opts = self.check_options(options)
-        # invalid options found
-        if any(checked_opts[0]):
-            return False
-
-        # unknown options found
-        if any(options.keys() - checked_opts[1]):
-            return False
-
-        missing = self.missing(options)
-        missing = (
-            missing["mandatory"] |
-            set(itertools.chain.from_iterable(missing["mandatory_exclusive"]))
-            )
-        if any(missing):
-            return False
-
-        return True
-
-    def missing(self, options: dict) -> dict:
-        """Determine the missing mandatory options."""
-        return {
-            "mandatory": self.mandatory.missing(options),
-            "mandatory_exclusive": self.mandatory_exclusive.missing(options),
-            "optional": self.optional.missing(options),
-            "optional_exclusive": self.optional_exclusive.missing(options)
-        }
-
-    def invalid_options(self, options: dict) -> set:
-        """Return invalid option keys."""
-        _options = options.copy()
-        if "type" in _options.keys():
-            del _options["type"]
-        trimmed_options = _options
-        checked_options = {
-            "mandatory": self.mandatory.check_options(trimmed_options),
-            "mandatory_exclusive": self.mandatory_exclusive.check_options(
-                trimmed_options),
-            "optional": self.optional.check_options(trimmed_options),
-            "optional_exclusive": self.optional_exclusive.check_options(
-                trimmed_options)
-        }
-        invalid_keys = set()
-        for ch_op in checked_options.values():
-            invalid_keys |= ch_op[0]
-
-        return invalid_keys
-
-
-class NodeType:
-    """A particular node type of a rank."""
-    def __init__(self, rank, type, options: dict,
-                 graph_config: GraphConfiguration):
-        self.rank = rank
-        self.type = type
-        self.options = NodeOptions.make(
-            options)
-        self._graph_config = graph_config
-
-    def __repr__(self):
-        return f"NodeType {self.rank}::{self.type}"
+    def all_keys(self):
+        keys = set()
+        keys |= self.mandatory.keys()
+        keys |= self.mandatory_exclusive.keys()
+        keys |= self.optional.keys()
+        keys |= self.optional_exclusive.keys()
+        keys |= {"type"}
+        return keys
 
     @property
-    def allowed_types(self):
-        return self._graph_config._dict["allowed_types"][self.rank][self.type]
-
-
-class Rank(UserDict):
-    """A rank in the configuration."""
-    def __init__(self, name: str, rank_dict: dict,
-                 graph_config: GraphConfiguration):
-        self._graph_config = graph_config
-        self.name = name
-        super().__init__(rank_dict)
-        for key, value in rank_dict.items():
-            self[key] = NodeType(self.name, key, value, self._graph_config)
-
-    def __str__(self):
-        return self.name
+    def exclusive_keygroups(self) -> tuple[set[str]]:
+        groups = tuple(g.keys() for g in self.mandatory_exclusive)
+        groups += tuple(g.keys() for g in self.optional_exclusive)
+        return groups
 
     @property
-    def types(self):
-        return tuple(self.values())
+    def nonexclusive_keys(self) -> set[str]:
+        keys = set()
+        keys |= self.mandatory.keys()
+        keys |= self.optional.keys()
+        keys |= {"type"}
+        return keys
 
     @property
-    def type_names(self):
-        return tuple(self.keys())
+    def mandatory(self):
+        return self._mand
 
-    def type(self, type_name: str = None) -> NodeType:
-        """Return configuration of specified node type.
+    @property
+    def mandatory_exclusive(self):
+        return self._mand_ex
 
-        If node_type is None and only one node type is defined,
-        return that type configuration.
+    @property
+    def optional(self):
+        return self._opt
+
+    @property
+    def optional_exclusive(self):
+        return self._opt_ex
+
+    def check(self, node_opts: dict):
+        """Checks node options for incompatibility with specification.
+
+        Ignores missing options, only raises exceptions for invalid options.
 
         Args:
-            type_name (str, optional): Name of node type. Defaults to None.
+            node_opts (dict): Node options dictionary.
 
-        Returns:
-            Node: The configuration of the node type.
+        Raises:
+            NodeConfigurationError: Raised, if an option entry is incompatible
+                with the specification.
         """
-        if type_name is None and len(self.keys()) == 1:
-            return tuple(self.values())[0]
-        return self[type_name]
+        opts_tup = (self._mand, self._mand_ex, self._opt, self._opt_ex)
+        for opt in opts_tup:
+            opt.check(node_opts)
+
+        unknown_keys = set(node_opts.keys() - self.all_keys)
+        if any(unknown_keys):
+            raise NodeConfigurationError(
+                f"Unknown keys {unknown_keys}.")
+
+    def verify(self, node_opts: dict):
+        """Verify node options.
+
+        Checks for incompatibility and completeness.
+
+        Args:
+            node_opts (dict): Node options dictionary.
+
+        Raises:
+            NodeConfigurationError: Raised, if an option entry is incompatible
+                with the specification or if there are missing options.
+        """
+        self.check(node_opts)
+        nonex_miss = self.nonexclusive_keys - node_opts.keys()
+        ex_miss = ()
+        for keys in self.exclusive_keygroups:
+            if not any(keys & node_opts.keys()):
+                ex_miss += (keys,)
+
+        if not any(nonex_miss) and not any(ex_miss):
+            return
+
+        err_msg = ("Missing node options:\n"
+                   f"\t Non-exclusive: {nonex_miss}\n"
+                   f"\t Exclusive: {ex_miss}")
+
+        raise NodeConfigurationError(err_msg)
 
 
-@dataclass
-class GraphConfiguration:
-    """Class storing all configuration parameters of the graph."""
-    _dict: FrozenDict
+class NodeSpecification:
 
-    def __init__(self, config: dict):
-        self._dict = config
+    def __init__(self, rankname: str, typename: str, node_options: dict,
+                 allowed_children: dict[str, tuple]):
+        self._rank = rankname
+        self._type = typename
+        self._mand = MandatoryOptions(node_options)
+        self._mand_ex = MandatoryExclusiveOptions(node_options)
+        self._opt = OptionalOptions(node_options)
+        self._opt_ex = OptionalExclusiveOptions(node_options)
+        self._allowed_children = allowed_children
+
+    def __str__(self):
+        return f"NodeSpecification: Rank {self.rankname}, Type {self.typename}"
+
+    @property
+    def options(self):
+        return NodeOptions(self._mand, self._mand_ex, self._opt, self._opt_ex)
+
+    @property
+    def allowed_children(self) -> dict[str, tuple]:
+        return self._allowed_children
+
+    @property
+    def rankname(self):
+        return self._rank
+
+    @property
+    def typename(self):
+        return self._type
+
+
+class RankSpecification:
+
+    def __init__(self, rankname: str, rank_config: dict,
+                 allowed_children: dict):
+        self._rankname = rankname
+        self._allowed_children = allowed_children
+        self._types = {typename: NodeSpecification(
+            self.name,
+            typename,
+            type_config,
+            self._allowed_children[typename])
+            for typename, type_config in rank_config.items()}
+
+    @property
+    def allowed_children(self) -> dict[str, dict[str, tuple]]:
+        return self._allowed_children
+
+    @property
+    def name(self) -> str:
+        return self._rankname
+
+    @property
+    def types(self) -> dict[str, NodeSpecification]:
+        return self._types
+
+
+class GraphSpecification:
+
+    _KEYS = {"ranks", "hierarchy", "allowed_children"}
+
+    def __init__(self, graph_config: dict):
+        if not graph_config.keys() == self._KEYS:
+            raise NodeConfigurationError
+
+        self._hierarchy = graph_config["hierarchy"]
+        self._ranks = {}
+        for rname, rdict in graph_config["ranks"].items():
+            rank_children = graph_config["allowed_children"][rname]
+            self._ranks[rname] = RankSpecification(rname, rdict, rank_children)
+
+    @property
+    def hierarchy(self):
+        return self._hierarchy
+
+    @property
+    def ranks(self) -> dict[str, RankSpecification]:
+        return self._ranks
+
+
+class NodeConfigurationProcessor:
+
+    @classmethod
+    def from_dict(cls, config_dict: dict):
+        return cls(GraphSpecification(config_dict))
+
+    def __init__(self, specification: GraphSpecification):
+        self._spec = specification
+
+    def get_specification(self, node: GraphNode
+                          ) -> NodeSpecification | tuple(NodeSpecification):
+        rankname = node.rank_name()
+        if node.type is not None:
+            return self._spec.ranks[rankname].types[node.type]
+
+        types_dict = self._spec.ranks[rankname].types.copy()
+        impossible_typenames = set()
+        for typename, nodetype in types_dict.items():
+            try:
+                nodetype.options.check(node.options.local)
+            except NodeConfigurationError:
+                impossible_typenames |= {typename}
+
+        possible_typenames = set(types_dict.keys() - impossible_typenames)
+        if len(possible_typenames) == 0:
+            raise NodeConfigurationError(
+                f"Node {node} has invalid options.")
+
+        parentspec = self.get_specification(node.parent)
         try:
-            none_rank = self._dict["ranks"]["NONE"]
-            raise errors.GraphError("The 'NONE' rank is reserved for"
-                                    " internal use.")
+            parent_typenames = parentspec.allowed_children[rankname]
+            parent_typenames = set(parent_typenames)
         except KeyError:
-            none_rank = {"NONE": {"NONE": {}}}
+            raise NodeConfigurationError(f"Node {node} has invalid rank"
+                                         f" for parent {node.parent}.")
 
-        for rank_dict in self._dict["ranks"].values():
-            for rtype_dict in rank_dict.values():
-                rtype_dict["optional"]["type"] = {
-                    "types": (str,),
-                    "default": None
-                }
+        possible_typenames &= parent_typenames
+        if len(possible_typenames) == 0:
+            raise NodeConfigurationError(
+                f"Node {node} has invalid options.")
 
-        self._dict["ranks"].update(none_rank)
-        self._dict = FrozenDict(self._dict)
-        ranks_dict = self._dict["ranks"]
-        for rank_name, opts in ranks_dict.items():
-            self._dict["ranks"][rank_name] = Rank(rank_name, opts, self)
-        self._ranks = {
-            rname: self._dict["ranks"][rname] for rname
-            in self._full_rank_names}
+        if len(possible_typenames) == 1:
+            typename = next(iter(possible_typenames))
+            return self._spec.ranks[rankname].types[typename]
+        elif len(possible_typenames) > 1:
+            return tuple(self._spec.ranks[rankname].types[tname]
+                         for tname in possible_typenames)
+        else:
+            raise NodeConfigurationError(f"Node {node} has invalid options.")
 
-    @property
-    def _full_rank_names(self) -> set:
-        return self._dict["ranks"].keys()
+    def set_type(self, node: GraphNode):
+        spec = self.get_specification(node)
+        if isinstance(spec, tuple):
+            raise NodeConfigurationError(
+                f"Ambiguous node type for node {node}.")
+        if node.type is None:
+            node.type = spec.typename
 
-    @property
-    def depth(self):
-        """The number of user-defined rank names."""
-        return len(self.rank_names)
+    def set_options(self, node: GraphNode):
+        spec = self.get_specification(node)
 
-    @property
-    def ranks(self):
-        return {self._dict["ranks"][key] for key in self.rank_names}
+        mand_miss = spec.options.mandatory.missing(node.options.local)
+        opt_miss = spec.options.optional.missing(node.options.local)
+        mandex_miss = spec.options.mandatory_exclusive.missing(
+            node.options.local)
+        optex_miss = spec.options.optional_exclusive.missing(
+            node.options.local)
 
-    @property
-    def rank_names(self) -> set:
-        """Set containing all user-defined rank names."""
-        return self._dict["ranks"].keys() - {"NONE"}
+        mand_fetched = {}
+        opt_fetched = {}
+        mandex_fetched = {}
+        optex_fetched = {}
 
-    @property
-    def rank_map(self) -> map:
-        """Mapping between rank index and rank names."""
-        return self._dict["hierarchy"]
+        for key in mand_miss:
+            mand_fetched[key] = node.options[key]
 
-    def allowed_types(self, rank_type_tuple: tuple[str, str]) -> dict:
-        """Return the allowed types for child nodes of a given node type."""
-        rtt = rank_type_tuple
-        return self.rank(rtt[0]).type(rtt[1]).allowed_types
+        for key in opt_miss:
+            try:
+                opt_fetched[key] = node.options[key]
+            except KeyError:
+                opt_fetched[key] = spec.options.optional[key]["default"]
 
-    def get_specification(self, node: GraphNode) -> NodeType:
-        """Return the specification of a node."""
-        return self.rank(node.rank_name()).type(node.type)
+        for group in mandex_miss:
+            matches = ()
+            for key in group:
+                try:
+                    mandex_fetched[key] = node.options[key]
+                    matches += (key,)
+                except KeyError:
+                    continue
 
-    def rank(self, rank_name) -> Rank:
-        """Return the specified rank of the configuration."""
-        return self._ranks[rank_name]
+            if len(matches) > 1:
+                raise NodeConfigurationError(
+                    f"Ambiguous global options {matches} for node {node}")
+            elif not any(matches):
+                raise NodeConfigurationError(
+                    f"Mandatory exclusive options {group} not found."
+                )
+
+        for group in optex_miss:
+            matches = ()
+            for key in group:
+                try:
+                    optex_fetched[key] = node.options[key]
+                    matches += (key,)
+                except KeyError:
+                    continue
+
+            if len(matches) > 1:
+                raise NodeConfigurationError(
+                    f"Ambiguous global options {matches} for node {node}")
+            elif not any(matches):
+                for key in group:
+                    optex_fetched[key] = spec.options.optional_exclusive[
+                        key]["default"]
+
+        all_fetched = (mand_fetched
+                       | opt_fetched
+                       | mandex_fetched
+                       | optex_fetched)
+
+        node.options.update(all_fetched)
+        spec.options.verify(node.options.local)

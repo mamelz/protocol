@@ -3,7 +3,7 @@ import os
 
 
 _FUNCTIONS_PATH = os.getenv("PROTOCOL_FUNCTIONS_PATH")
-_GRAPH_CONFIG_DICT = {
+_GRAPH_CONFIG_DICT_OLD = {
     "ranks": {
         "Schedule": {
             "default": {
