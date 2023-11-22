@@ -17,6 +17,7 @@ class GraphProcessor:
         self._user_graph = root.copy()
         self._user_graph_spec = self._user_graph.graph_spec
         self._run_graph: RunGraphRoot = None
+        self._run_graph_spec = RunGraphRoot.graph_spec
         self._predef_tasks = predefined_tasks
 
     def preprocess(self):
@@ -52,4 +53,5 @@ class GraphProcessor:
         only contains the minimum amount of information needed for execution
         and is an instance of RunGraphRoot.
         """
-        pass
+        stages = self._user_graph.children
+        

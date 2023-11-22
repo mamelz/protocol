@@ -5,14 +5,14 @@ USER_GRAPH_CONFIG_DICT = {
         },
         "Schedule": {
             "default": {
-                "mandatory": {},
+                "mandatory": {
+                    "stages": {
+                        "types": (list,)
+                    }
+                },
                 "optional": {
                     "global_options": {
                         "types": (dict,),
-                        "default": {}
-                    },
-                    "stages": {
-                        "types": (list,),
                         "default": {}
                     },
                     "start_time": {
