@@ -34,19 +34,19 @@ class GraphProcessor:
         taskresolver = TaskResolver(self._user_graph_spec, self._predef_tasks)
         confprocessor = NodeConfigurationProcessor(self._user_graph_spec)
 
-        # first, resolve all tasks to routines
+        for node in self._user_graph:
+            confprocessor.set_type(node)
+
         for node in self._user_graph:
             if node.rank == 2:
                 assert node.rank_name() == "Task"
                 taskresolver.resolve(node)
 
-        # then, process node options
         for node in self._user_graph:
             confprocessor.set_type(node)
             confprocessor.set_options(node)
             confprocessor.verify(node)
 
-        # finally, verify all nodes once more
         for node in self._user_graph:
             confprocessor.verify(node)
 

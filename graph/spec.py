@@ -460,4 +460,4 @@ class NodeConfigurationProcessor:
 
     def verify(self, node: GraphNode):
         spec = self.get_specification(node)
-        spec.options.verify(node)
+        spec.options.verify(node.options.local)

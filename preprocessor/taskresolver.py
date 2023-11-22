@@ -26,9 +26,9 @@ class TaskResolver:
                 f" with a non-task node: {task_node}")
 
         if task_node.type == "default":
-            self._resolve_default(self, task_node)
+            self._resolve_default(task_node)
         elif task_node.type == "predefined":
-            self._resolve_predefined(self, task_node)
+            self._resolve_predefined(task_node)
         else:
             raise errors.TaskResolverError(
                 f"Unknown task type {task_node.type}")

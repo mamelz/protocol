@@ -379,22 +379,12 @@ class GraphRootABCMeta(GraphNodeMeta, ABCMeta):
 
 class GraphRootMeta(GraphRootABCMeta):
 
-    def __new__(mcls, name, bases: tuple[GraphNodeMeta], attrs) -> GraphRoot:
-        #if len(bases) != 1:
-        #    raise ValueError("GraphRoot class must subclass exactly one class,"
-        #                     " the type of the graph nodes.")
-        #if not issubclass(bases[0], GraphNode):
-        #    raise TypeError("Base class must be subclass of GraphNode.")
-        #if issubclass(bases[0], GraphRoot):
-        #    raise TypeError("Base class must not be subclass of GraphRoot.")
-
-        #bases += (GraphRoot,)
-
+    def __new__(mcls, name, bases: tuple[GraphNodeMeta], attrs):
         return super().__new__(
-            mcls, name, bases, attrs)#, graph_spec=bases[1]._GRAPH_SPEC)
+            mcls, name, bases, attrs)
 
     def __init__(cls, name, bases: tuple[GraphNodeMeta], attrs):
-        super().__init__(name, bases, attrs)#, graph_spec=bases[1]._GRAPH_SPEC)
+        super().__init__(name, bases, attrs)
         cls._CHILD_TYPE = bases[1]
 
 
