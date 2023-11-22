@@ -4,3 +4,7 @@ class GraphProcessorError(Exception):
 
 class TaskResolverError(Exception):
     pass
+
+
+class StageCompilerError(Exception):
+    pass

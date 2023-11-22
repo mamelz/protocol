@@ -1,4 +1,5 @@
 from . import errors
+from .stagecompiler import StageCompiler
 from .taskresolver import TaskResolver
 from .run_graph import RunGraphRoot
 from .user_graph import UserGraphRoot
@@ -14,10 +15,11 @@ class GraphProcessor:
                 "GraphProcessor must be initialized with an instance of"
                 f" {UserGraphRoot} but got {type(root)}.")
 
-        self._user_graph = root.copy()
-        self._user_graph_spec = self._user_graph.graph_spec
-        self._run_graph: RunGraphRoot = None
-        self._run_graph_spec = RunGraphRoot.graph_spec
+        self._user_graph = root
+        self._preprocessed_graph = root.copy()
+        self._user_graph_spec = root.graph_spec
+        self._run_graph = RunGraphRoot({"stages": []})
+        self._run_graph_spec = self._run_graph.graph_spec
         self._predef_tasks = predefined_tasks
 
     def preprocess(self):
@@ -29,20 +31,20 @@ class GraphProcessor:
         taskresolver = TaskResolver(self._user_graph_spec, self._predef_tasks)
         confprocessor = NodeConfigurationProcessor(self._user_graph_spec)
 
-        for node in self._user_graph:
+        for node in self._preprocessed_graph:
             confprocessor.set_type(node)
 
-        for node in self._user_graph:
+        for node in self._preprocessed_graph:
             if node.rank == 2:
                 assert node.rank_name() == "Task"
                 taskresolver.resolve(node)
 
-        for node in self._user_graph:
+        for node in self._preprocessed_graph:
             confprocessor.set_type(node)
             confprocessor.set_options(node)
             confprocessor.verify(node)
 
-        for node in self._user_graph:
+        for node in self._preprocessed_graph:
             confprocessor.verify(node)
 
     def compile(self):
@@ -53,5 +55,10 @@ class GraphProcessor:
         only contains the minimum amount of information needed for execution
         and is an instance of RunGraphRoot.
         """
-        stages = self._user_graph.children
-        
+        stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
+                                      self._run_graph._CHILD_TYPE)
+        user_stages = self._preprocessed_graph.children
+        run_stages = [None] * len(user_stages)
+
+        for i, stage in user_stages:
+            run_stages[i] = stagecompiler.compile(stage, self._run_graph)
