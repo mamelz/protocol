@@ -76,9 +76,10 @@ class GraphNode(metaclass=ABCMeta):
     _GRAPH_SPEC: GraphSpecification
     _CHILD_TYPE: GraphNodeMeta
 
+    @property
     @classmethod
-    def make_child(cls, parent, options, rank) -> Self:
-        return cls(parent, options, rank)
+    def graph_spec(self):
+        return self._GRAPH_SPEC
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None):
         if rank is None:
