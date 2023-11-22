@@ -111,11 +111,8 @@ RUN_GRAPH_CONFIG_DICT = {
             }
         },
         "Stage": {
-            "regular": {
-                "Routine": ("regular",)
-            },
-            "evolution": {
-                "Routine": ("evolution", "propagation")
+            "default": {
+                "Routine": ("regular", "evolution", "propagation")
             }
         },
         "Routine": {

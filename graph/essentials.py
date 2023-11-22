@@ -4,6 +4,7 @@ if TYPE_CHECKING:
     from .base import GraphNode
 
 from collections import UserDict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -36,23 +37,30 @@ class GraphNodeID:
 NoneID = GraphNodeID(())
 
 
-class NodeChildren(tuple):
-    """Thin subclass of tuple to store child nodes.
+class NodeChildren(Iterable):
 
-    The purpose of this class is to accelerate the .index() method that is used
-    to infer node IDs in the .ID property of graph nodes. This is achieved by
-    storing the object ids of all child nodes in a np.ndarray and using
-    np.where() to find the index.
-    """
-    def __new__(cls, children_iterable, **tup_kwargs):
-        return super().__new__(
-            cls, children_iterable, **tup_kwargs)
+    def __init__(self, children_iterable):
+        self._tuple: tuple[GraphNode] = tuple(children_iterable)
+        self._id_arr = self._calculate_id_arr()
 
-    def __init__(self, _):
-        self._id_arr = np.array(tuple(id(ch) for ch in self), copy=False)
+    def __iter__(self):
+        return iter(self._tuple)
 
     def __len__(self):
         return self._id_arr.size
+
+    def _calculate_id_arr(self) -> np.ndarray:
+        return np.array(tuple(id(ch) for ch in self._tuple),
+                        copy=False)
+
+    @property
+    def tuple(self):
+        return self._tuple
+
+    @tuple.setter
+    def tuple(self, new: tuple[GraphNode]):
+        self._tuple = new
+        self._id_arr = self._calculate_id_arr()
 
     def index(self, node):
         """Return index of the given node in the children tuple."""

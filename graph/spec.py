@@ -457,3 +457,7 @@ class NodeConfigurationProcessor:
 
         node.options.update(all_fetched)
         spec.options.verify(node.options.local)
+
+    def verify(self, node: GraphNode):
+        spec = self.get_specification(node)
+        spec.options.verify(node)

@@ -90,7 +90,6 @@ USER_GRAPH_CONFIG_DICT = {
                         "types": (str,)
                     }
                 },
-                "optional": {}
             }
         },
         "Routine": {

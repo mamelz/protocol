@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Self
 if TYPE_CHECKING:
     from .spec import GraphSpecification
 
+import copy
 import functools
+import itertools
 import json
 from abc import (
     ABCMeta,
@@ -70,14 +72,14 @@ class GraphNodeMeta(GraphNodeABCMeta):
         cls._CHILD_TYPE = cls
 
 
-class GraphNode(metaclass=ABCMeta):
+class GraphNode(metaclass=GraphNodeABCMeta):
     """Abstract base class for nodes of the graph."""
 
     _GRAPH_SPEC: GraphSpecification
     _CHILD_TYPE: GraphNodeMeta
 
-    @property
     @classmethod
+    @property
     def graph_spec(self):
         return self._GRAPH_SPEC
 
@@ -86,11 +88,11 @@ class GraphNode(metaclass=ABCMeta):
             rank = parent.rank + 1
         self._rank = rank
         self._parent = parent
-        self.__children = ()
+        self._children = NodeChildren(())
         self._options = options
         if not self.isleaf:
             try:
-                self.__children = NodeChildren(
+                self._children = NodeChildren(
                     self._CHILD_TYPE(self, opts) for opts in self._options[
                         f"{self.rank_name(self.rank + 1).lower()}s"])
             except KeyError:
@@ -105,12 +107,12 @@ class GraphNode(metaclass=ABCMeta):
                 f" {self.ID}")
 
     @property
-    def _children(self):
-        return self.__children
+    def children(self) -> tuple[GraphNode]:
+        return self._children.tuple
 
-    @_children.setter
-    def _children(self, new_ch):
-        self.__children = NodeChildren(new_ch)
+    @children.setter
+    def children(self, new: tuple[GraphNode]):
+        self._children.tuple = new
         self.root.register_children_mutation(self)
 
     @property
@@ -139,10 +141,6 @@ class GraphNode(metaclass=ABCMeta):
                     break
                 node = node.parent
         return tuple(anc_gen())
-
-    @property
-    def children(self) -> tuple[GraphNode]:
-        return self._children
 
     @property
     def external_options(self) -> dict:
@@ -244,18 +242,18 @@ class GraphNode(metaclass=ABCMeta):
                 nodes.
         """
         if not isinstance(options, Sequence):
-            self._children = (
-                *self._children, type(self)(self, options))
+            self.children = (
+                *self.children, self._CHILD_TYPE(self, options))
             return
         else:
-            self._children = (
-                *self._children,
-                *(type(self)(self, opts) for opts in options))
+            self.children = (
+                *self.children,
+                *(self._CHILD_TYPE(self, opts) for opts in options))
             return
 
     def clear_children(self):
         """Sets 'children' attribute to empty tuple."""
-        self._children = ()
+        self.children = ()
 
     def get_parent(self, n: int = 1) -> Self:
         """
@@ -335,8 +333,29 @@ class GraphNode(metaclass=ABCMeta):
         else:
             return rank_dict[rank]
 
-    def set_children_from_options(self, options: Sequence[dict] = ({},)
-                                  ) -> None:
+    def replace_child(self, index: int, new: Sequence[GraphNode]):
+        """Replace a child with one or several nodes."""
+        children_left = self.children[:index]
+        children_right = self.children[index + 1:]
+        self.children = tuple(itertools.chain(
+            children_left,
+            new,
+            children_right
+        ))
+
+    def replace_child_from_options(self, index: int,
+                                   options: Sequence[dict]):
+        """Replace a child with one or several nodes constructed from
+        sequence of options."""
+        children_left = self.children[:index]
+        children_right = self.children[index + 1:]
+        new_children = (self._CHILD_TYPE(self, opts) for opts in options)
+        complete_it = itertools.chain(children_left,
+                                      new_children,
+                                      children_right)
+        self.children = tuple(itertools.chain.from_iterable(complete_it))
+
+    def set_children_from_options(self, options: Sequence[dict]):
         """Replace all children from sequence of options.
 
         This deletes all children of the node and constructs new one from the
@@ -344,42 +363,47 @@ class GraphNode(metaclass=ABCMeta):
         Args:
             options (Sequence[dict]): The options of the new children.
         """
-        self._children = tuple(type(self)(self, opts)
-                               for opts in options)
+        self.children = tuple(self._CHILD_TYPE(self, opts)
+                              for opts in options)
         return
 
 
-class GraphRootMeta(GraphNodeMeta):
+class GraphRootABCMeta(GraphNodeMeta, ABCMeta):
+
+    def __new__(mcls, name, bases, attrs):
+        return ABCMeta.__new__(mcls, name, bases, attrs)
+
+    def __init__(cls, name, bases, attrs):
+        ABCMeta.__init__(cls, name, bases, attrs)
+
+
+class GraphRootMeta(GraphRootABCMeta):
 
     def __new__(mcls, name, bases: tuple[GraphNodeMeta], attrs) -> GraphRoot:
-        if len(bases) != 1:
-            raise ValueError("GraphRoot class must subclass exactly one class,"
-                             " the type of the graph nodes.")
-        if not issubclass(bases[0], GraphNode):
-            raise TypeError("Base class must be subclass of GraphNode.")
-        if issubclass(bases[0], GraphRoot):
-            raise TypeError("Base class must not be subclass of GraphRoot.")
+        #if len(bases) != 1:
+        #    raise ValueError("GraphRoot class must subclass exactly one class,"
+        #                     " the type of the graph nodes.")
+        #if not issubclass(bases[0], GraphNode):
+        #    raise TypeError("Base class must be subclass of GraphNode.")
+        #if issubclass(bases[0], GraphRoot):
+        #    raise TypeError("Base class must not be subclass of GraphRoot.")
 
-        bases += (GraphRoot,)
+        #bases += (GraphRoot,)
 
         return super().__new__(
-            mcls, name, bases, attrs, graph_spec=bases[0]._GRAPH_SPEC)
+            mcls, name, bases, attrs)#, graph_spec=bases[1]._GRAPH_SPEC)
 
     def __init__(cls, name, bases: tuple[GraphNodeMeta], attrs):
-        super().__init__(name, bases, attrs, graph_spec=bases[0]._GRAPH_SPEC)
-        cls._CHILD_TYPE = bases[0]
+        super().__init__(name, bases, attrs)#, graph_spec=bases[1]._GRAPH_SPEC)
+        cls._CHILD_TYPE = bases[1]
 
 
-class GraphRoot(GraphNode, metaclass=ABCMeta):
+class GraphRoot(GraphNode, metaclass=GraphRootABCMeta):
     """Class for the root node of a graph.
 
     Contains the additional attribute ._map and provides functionality to
     ensure integrity of the graph options throughout execution.
     """
-#    def __new__(cls, options: dict):
-#        obj = super().__new__(cls, GraphNodeNONE(), options)
-#        return obj
-
     def __init__(self, options: dict):
         super().__init__(GraphNodeNONE(), options)
         self._mutated_nodes_ids = set()
@@ -423,6 +447,11 @@ class GraphRoot(GraphNode, metaclass=ABCMeta):
             self._make_map()
         self._mutated_nodes_ids = set()
 
+    def copy(self) -> Self:
+        """Return a deep copy of the GraphRoot object, includes all children.
+        """
+        return copy.deepcopy(self)
+
     def get_generation(self, rank):
         """Return all nodes of a given rank."""
         node = self.goto((0,)*(rank + 1))
@@ -434,5 +463,5 @@ class GraphRoot(GraphNode, metaclass=ABCMeta):
                 node = None
 
     def register_children_mutation(self, node: Self):
-        """Register a mutation of the ._children attribute."""
+        """Register a mutation of the .children attribute."""
         self._mutated_nodes_ids.add(node.ID)
