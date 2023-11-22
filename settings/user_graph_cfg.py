@@ -1,4 +1,4 @@
-YAML_GRAPH_CONFIG_DICT = {
+USER_GRAPH_CONFIG_DICT = {
     "ranks": {
         "NONE": {
             "NONE": {}

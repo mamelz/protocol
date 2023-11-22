@@ -14,8 +14,8 @@ import functools
 import json
 from abc import (
     ABCMeta,
-    abstractmethod,
-    abstractclassmethod
+    # abstractmethod,
+    # abstractclassmethod
     )
 from collections import UserDict
 from collections.abc import Sequence
@@ -73,11 +73,6 @@ class GraphNodeNONE:
 
 class GraphNodeABCMeta(ABCMeta):
     pass
-    #def __new__(mcls, name, bases, attrs):
-    #    return super().__new__(mcls, name, bases, attrs)
-
-    #def __init__(cls, name, bases, attrs):
-    #    return super().__init__(name, bases, attrs)
 
 
 class GraphNodeMeta(GraphNodeABCMeta):
@@ -129,7 +124,8 @@ class GraphNode(metaclass=ABCMeta):
         return iter(self.map.values())
 
     def __repr__(self) -> str:
-        return f"{self.rank_name(self.rank).capitalize()}: {self.ID}"
+        return (f"{type(self)}: {self.rank_name(self.rank).capitalize()}:"
+                f" {self.ID}")
 
     @property
     def _children(self):
