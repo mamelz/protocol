@@ -10,7 +10,7 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .graph.user import UserGraphRoot
+from .preprocessor.user_graph import UserGraphRoot
 from . import preprocessor
 from .routines import (
     Routine,

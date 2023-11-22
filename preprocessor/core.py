@@ -5,21 +5,20 @@ if TYPE_CHECKING:
 from functools import wraps
 
 from . import errors
-from ..graph import GraphNode, GraphRoot
-from ..graph.spec import NodeConfigurationProcessor
 from . import stage
+from .user_graph import UserGraphNode
+from .run_graph import RunGraphNode
+from ..graph.spec import NodeConfigurationProcessor
 
 
-# def process_graph(graph: GraphRoot):
-#     options_proc = NodeOptionsProcessor(GRAPH_CONFIG)
-#     for node in graph:
-#         options_proc.process(node)
-# 
-#     for node in graph:
-#         options_proc.process_routines(node)
-# 
-#     for node in graph:
-#         options_proc.process(node)
+class NodeProcessor:
+
+    def __init__(self, node: UserGraphNode):
+        self._graph_spec = node._GRAPH_SPEC
+
+
+
+
 
 
 class NodeOptionsProcessor:
