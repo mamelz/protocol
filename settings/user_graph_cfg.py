@@ -134,11 +134,18 @@ USER_GRAPH_CONFIG_DICT = {
                 "mandatory": {
                     "routine_name": {
                         "types": (str,),
-                    },
-                    "time": {
-                        "types": (float,),
                     }
                 },
+                "mandatory-exclusive": (
+                    {
+                        "time": {
+                            "types": (float,)
+                        },
+                        "localtime": {
+                            "types": (float,)
+                        }
+                    },
+                ),
                 "optional": {
                     "args": {
                         "types": (list,),

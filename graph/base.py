@@ -111,9 +111,20 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         return self._children.tuple
 
     @children.setter
-    def children(self, new: tuple[GraphNode]):
+    def children(self, new: Sequence[GraphNode]):
+        if not isinstance(new, tuple):
+            new = tuple(*new)
+
+        for node in new:
+            if node.parent is not self:
+                raise ValueError("New nodes must have self as parent.")
+
         self._children.tuple = new
         self.root.register_children_mutation(self)
+
+    @children.deleter
+    def children(self):
+        self._children.tuple = ()
 
     @property
     def _it(self):
@@ -232,6 +243,9 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         """Return map of self and all subordinate nodes."""
         return dict(zip(self._it_id, self._it))
 
+    def add_children(self, add: Sequence[GraphNode]):
+        self.children = (*self.children, *add)
+
     def add_children_from_options(self, options: Sequence[dict] | dict = {}):
         """Create new child nodes and append them to this node's children.
 
@@ -253,7 +267,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     def clear_children(self):
         """Sets 'children' attribute to empty tuple."""
-        self.children = ()
+        del self.children
 
     def get_parent(self, n: int = 1) -> Self:
         """
@@ -354,6 +368,10 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                                       new_children,
                                       children_right)
         self.children = tuple(itertools.chain.from_iterable(complete_it))
+
+    def set_children(self, new: Sequence[GraphNode]):
+        """Set children to tuple of nodes"""
+        self.children = new
 
     def set_children_from_options(self, options: Sequence[dict]):
         """Replace all children from sequence of options.
