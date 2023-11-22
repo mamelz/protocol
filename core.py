@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .graph.core import GraphRoot
+    from .graph.base import GraphRoot
 
 import sys
 import textwrap
@@ -10,7 +10,7 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .graph import GraphNode, GraphNodeNONE
+from .graph.user import UserGraphRoot
 from . import preprocessor
 from .routines import (
     Routine,
@@ -255,12 +255,12 @@ class Schedule(_Performable):
         """Construct schedule from configuration dictionary."""
         super().__init__()
         self._configuration = configuration
-        self._root_node: GraphRoot = GraphNode(GraphNodeNONE(), configuration)
+        self._root_node: GraphRoot = UserGraphRoot(configuration)
         if label is not None:
             self.label = label
         else:
             try:
-                self.label = self.root._options["label"]
+                self.label = self.root.options["label"]
             except KeyError:
                 self.label = "no_label"
 
@@ -276,10 +276,6 @@ class Schedule(_Performable):
         return self._map.values().__str__()
 
     @property
-    def _map(self):
-        return self.root.map
-
-    @property
     def _num_stages(self):
         return len(list(self.root.get_generation(1)))
 
@@ -290,11 +286,11 @@ class Schedule(_Performable):
     @property
     def start_time(self) -> float:
         """The initial time of the system."""
-        return self.root._options["start_time"]
+        return self.root.options["start_time"]
 
     @start_time.setter
     def start_time(self, new):
-        self.root._options["start_time"] = new
+        self.root.options["start_time"] = new
         if self._system_initialized:
             self._reinitialize_system()
 

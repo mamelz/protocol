@@ -1,23 +1,25 @@
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..graph.base import GraphNode, GraphRoot
+
 from functools import wraps
 
-from . import ConfigurationChecker
 from . import errors
-from . import GraphNode, GraphRoot
-from . import GRAPH_CONFIG
-from . import NodeType
+from ..graph import GraphNode, GraphRoot
+from ..graph.spec import NodeConfigurationProcessor
 from . import stage
 
 
-def process_graph(graph: GraphRoot):
-    options_proc = NodeOptionsProcessor(GRAPH_CONFIG)
-    for node in graph:
-        options_proc.process(node)
-
-    for node in graph:
-        options_proc.process_routines(node)
-
-    for node in graph:
-        options_proc.process(node)
+# def process_graph(graph: GraphRoot):
+#     options_proc = NodeOptionsProcessor(GRAPH_CONFIG)
+#     for node in graph:
+#         options_proc.process(node)
+# 
+#     for node in graph:
+#         options_proc.process_routines(node)
+# 
+#     for node in graph:
+#         options_proc.process(node)
 
 
 class NodeOptionsProcessor:
@@ -42,7 +44,7 @@ class NodeOptionsProcessor:
         del self._spec
         del self._checker
 
-    def _determine_specification(self) -> NodeType:
+    def _determine_specification(self):
         """Determine the specification that applies for the node."""
         node_rank = self._node.rank_name()
         if self._node.type is not None:

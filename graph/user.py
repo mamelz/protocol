@@ -1,5 +1,5 @@
 from .base import GraphNode, GraphNodeMeta, GraphRootMeta
-from .config import GraphSpecification
+from .spec import GraphSpecification
 from ..settings.user_graph_cfg import USER_GRAPH_CONFIG_DICT
 
 

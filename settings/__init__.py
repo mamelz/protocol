@@ -2,7 +2,7 @@
 import os
 
 _FUNCTIONS_PATH = os.getenv("PROTOCOL_FUNCTIONS_PATH")
-_SETTINGS = {
+_SETTINGS_DICT = {
     "VERBOSE": False,
     "FUNCTIONS_PATH": _FUNCTIONS_PATH,
 }
@@ -42,4 +42,4 @@ class Settings:
         self._set_options_from_dict()
 
 
-SETTINGS = Settings(_SETTINGS)
+SETTINGS = Settings(_SETTINGS_DICT)
