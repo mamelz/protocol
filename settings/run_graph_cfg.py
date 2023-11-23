@@ -13,10 +13,20 @@ RUN_GRAPH_CONFIG_DICT = {
             },
         },
         "Stage": {
-            "default": {
+            "regular": {
                 "mandatory": {
                     "routines": {
-                        "types": (dict,)
+                        "types": (list,)
+                    },
+                },
+            },
+            "evolution": {
+                "mandatory": {
+                    "propagation_time": {
+                        "types": (float,)
+                    },
+                    "routines": {
+                        "types": (list,)
                     },
                 },
             },
@@ -111,8 +121,11 @@ RUN_GRAPH_CONFIG_DICT = {
             }
         },
         "Stage": {
-            "default": {
-                "Routine": ("regular", "evolution", "propagation")
+            "regular": {
+                "Routine": ("regular")
+            },
+            "evolution": {
+                "Routine": ("evolution", "propagation")
             }
         },
         "Routine": {

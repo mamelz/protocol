@@ -47,7 +47,7 @@ class GraphProcessor:
         for node in self._preprocessed_graph:
             confprocessor.verify(node)
 
-    def compile(self):
+    def compile(self) -> RunGraphRoot:
         """Compile the user graph to a run graph.
 
         During compilation, all implicit routines like propagation routines
@@ -62,3 +62,7 @@ class GraphProcessor:
 
         for i, stage in user_stages:
             run_stages[i] = stagecompiler.compile(stage, self._run_graph)
+
+        self._run_graph.set_children(run_stages)
+
+        return self._run_graph

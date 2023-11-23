@@ -31,7 +31,7 @@ USER_GRAPH_CONFIG_DICT = {
                         "default": {}
                     },
                     "tasks": {
-                        "types": (dict,),
+                        "types": (list,),
                         "default": {}
                     },
                 }
