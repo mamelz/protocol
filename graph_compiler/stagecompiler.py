@@ -55,6 +55,7 @@ class StageCompiler:
             # "type": "regular"
             }
         out_stage = RunGraphNode(parent, stage_opts, rank=1)
+        parent.add_children((out_stage,))
         try:
             self._out_config_proc.verify(out_stage)
         except NodeConfigurationError:
@@ -80,6 +81,7 @@ class StageCompiler:
         monroutopts = in_stg_opts["monitoring"]
         usrrouts = stage_node.children
         out_stage = self._out_type(parent, {}, rank=1)
+        parent.add_children((out_stage,))
 
         usr_timetable: dict[float, tuple[UserGraphNode]] = {}
         for rout in usrrouts:
@@ -100,7 +102,7 @@ class StageCompiler:
             else:
                 usr_timetable[time] += (out_rout,)
 
-        usr_times = np.array(usr_timetable.keys())
+        usr_times = np.array(tuple(usr_timetable.keys()))
 
         if stepsize is None and numsteps is None:
             mon_times = ()
@@ -123,7 +125,7 @@ class StageCompiler:
             mon_routs = ()
             for opt in monroutopts:
                 mon_routs += (
-                    self._out_type(out_stage, {**tdict, **opt}, rank=2))
+                    self._out_type(out_stage, {**tdict, **opt}, rank=2),)
             mon_timetable[time] = mon_routs
 
         rout_times = np.unique(np.concatenate([usr_times, mon_times]))
@@ -137,9 +139,26 @@ class StageCompiler:
             }
             prop_timetable[time] = self._out_type(out_stage, opt, rank=2)
 
-        complete_timetable = {
-            t: (*mon_timetable[t], *usr_timetable[t]) for t in rout_times
-        }
+        complete_timetable: dict[float, dict] = {}
+        for time in rout_times:
+            try:
+                complete_timetable[time] = mon_timetable[time]
+            except KeyError:
+                complete_timetable[time] = ()
+
+            try:
+                complete_timetable[time] += usr_timetable[time]
+            except KeyError:
+                pass
+
+            try:
+                complete_timetable[time] += (prop_timetable[time],)
+            except KeyError:
+                pass
+
+#        complete_timetable = {
+#            t: (*mon_timetable[t], *usr_timetable[t]) for t in rout_times
+#        }
 
         for t, rout in prop_timetable.items():
             try:

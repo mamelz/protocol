@@ -106,12 +106,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         return (f"{type(self)}: {self.rank_name(self.rank).capitalize()}:"
                 f" {self.ID}")
 
-    @property
-    def children(self) -> tuple[GraphNode]:
-        return self._children.tuple
-
-    @children.setter
-    def children(self, new: Sequence[GraphNode]):
+    def _set_children_tuple(self, new: Sequence[GraphNode]):
         if not isinstance(new, tuple):
             new = tuple(*new)
 
@@ -120,6 +115,14 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                 raise ValueError("New nodes must have self as parent.")
 
         self._children.tuple = new
+
+    @property
+    def children(self) -> tuple[GraphNode]:
+        return self._children.tuple
+
+    @children.setter
+    def children(self, new: Sequence[GraphNode]):
+        self._set_children_tuple(new)
         self.root.register_children_mutation(self)
 
     @children.deleter
@@ -357,8 +360,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             children_right
         ))
 
-    def replace_child_from_options(self, index: int,
-                                   options: Sequence[dict]):
+    def replace_child_from_options(self, index: int, options: Sequence[dict]):
         """Replace a child with one or several nodes constructed from
         sequence of options."""
         children_left = self.children[:index]
@@ -369,9 +371,14 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                                       children_right)
         self.children = tuple(itertools.chain.from_iterable(complete_it))
 
-    def set_children(self, new: Sequence[GraphNode]):
-        """Set children to tuple of nodes"""
-        self.children = new
+    def set_children(self, new: Sequence[GraphNode], quiet=False):
+        """Set children to tuple of nodes. If 'quiet' is True,
+        the child mutation will not be registered at the root.
+        """
+        if not quiet:
+            self.children = new
+        else:
+            self._set_children_tuple(new)
 
     def set_children_from_options(self, options: Sequence[dict]):
         """Replace all children from sequence of options.
@@ -383,7 +390,6 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         """
         self.children = tuple(self._CHILD_TYPE(self, opts)
                               for opts in options)
-        return
 
 
 class GraphRootABCMeta(GraphNodeMeta, ABCMeta):

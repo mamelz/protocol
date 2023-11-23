@@ -18,8 +18,6 @@ class GraphCompiler:
         self._user_graph = root
         self._preprocessed_graph = root.copy()
         self._user_graph_spec = root.graph_spec
-        self._run_graph = RunGraphRoot({"stages": []})
-        self._run_graph_spec = self._run_graph.graph_spec
         self._predef_tasks = predefined_tasks
 
     def preprocess(self):
@@ -54,13 +52,14 @@ class GraphCompiler:
         are constructed. Returns the compiled graph, an instance of
         RunGraphRoot.
         """
+        run_graph = RunGraphRoot({"stages": []})
         stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
-                                      self._run_graph._CHILD_TYPE)
+                                      run_graph._CHILD_TYPE)
 
         run_stages = [None] * self._preprocessed_graph.num_children
         for i, stage in enumerate(self._preprocessed_graph.children):
-            run_stages[i] = stagecompiler.compile(stage, self._run_graph)
+            run_stages[i] = stagecompiler.compile(stage, run_graph)
 
-        self._run_graph.children = tuple(run_stages)
+        run_graph.children = tuple(run_stages)
 
-        return self._run_graph
+        return run_graph
