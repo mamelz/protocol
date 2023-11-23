@@ -56,10 +56,9 @@ class GraphCompiler:
         """
         stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
                                       self._run_graph._CHILD_TYPE)
-        user_stages = self._preprocessed_graph.children
-        run_stages = [None] * len(user_stages)
 
-        for i, stage in user_stages:
+        run_stages = [None] * self._preprocessed_graph.num_children
+        for i, stage in enumerate(self._preprocessed_graph.children):
             run_stages[i] = stagecompiler.compile(stage, self._run_graph)
 
         self._run_graph.children = tuple(run_stages)
