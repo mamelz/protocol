@@ -6,7 +6,7 @@ from .user_graph import UserGraphRoot
 from ..graph.spec import NodeConfigurationProcessor
 
 
-class GraphProcessor:
+class GraphCompiler:
 
     def __init__(self, root: UserGraphRoot,
                  predefined_tasks: dict[str, dict] = {}):
