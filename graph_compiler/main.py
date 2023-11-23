@@ -63,6 +63,6 @@ class GraphProcessor:
         for i, stage in user_stages:
             run_stages[i] = stagecompiler.compile(stage, self._run_graph)
 
-        self._run_graph.set_children(run_stages)
+        self._run_graph.children = tuple(run_stages)
 
         return self._run_graph
