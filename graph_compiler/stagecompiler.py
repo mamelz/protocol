@@ -19,7 +19,7 @@ class StageCompiler:
         out_rout_spec = self._out_type._GRAPH_SPEC.ranks["Routine"]
         out_stg_spec = self._out_type._GRAPH_SPEC.ranks["Stage"]
         self._out_rout_keys = {
-            k: v.options.all_keys for k, v in out_rout_spec.types.items()
+            k: v.options.keys() for k, v in out_rout_spec.types.items()
         }
         self._out_stg_keys = {k: v for k, v in out_stg_spec.types.items()}
         self._out_config_proc = NodeConfigurationProcessor(
