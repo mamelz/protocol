@@ -51,9 +51,8 @@ class GraphCompiler:
         """Compile the user graph to a run graph.
 
         During compilation, all implicit routines like propagation routines
-        are constructed in their respective stages. The resulting graph (root)
-        only contains the minimum amount of information needed for execution
-        and is an instance of RunGraphRoot.
+        are constructed. Returns the compiled graph, an instance of
+        RunGraphRoot.
         """
         stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
                                       self._run_graph._CHILD_TYPE)
