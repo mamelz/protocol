@@ -83,14 +83,8 @@ class ExclusiveOptionsABC(tuple[dict], ABC):
             keys |= d.keys()
         return keys
 
-    def missing(self, node_opts: dict) -> tuple[set[str]]:
-        missing_groups = ()
-        for group in self:
-            comm_keys = group.keys() & node_opts.keys()
-            if len(comm_keys) == 0:
-                missing_groups += set(group.keys())
-
-        return missing_groups
+    def missing(self, node_opts: dict) -> set[str]:
+        return set(self.keys() - node_opts.keys())
 
 
 class MandatoryOptions(OptionsABC):
