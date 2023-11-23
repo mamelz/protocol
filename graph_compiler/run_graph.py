@@ -9,4 +9,11 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
 
 
 class RunGraphRoot(GraphRoot, RunGraphNode, metaclass=GraphRootMeta):
-    pass
+
+    @property
+    def routines(self):
+        return self.leafs
+
+    @property
+    def stages(self):
+        return self.children
