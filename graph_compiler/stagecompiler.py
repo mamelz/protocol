@@ -80,7 +80,13 @@ class StageCompiler:
         numsteps = in_stg_opts["monitoring_numsteps"]
         monroutopts = in_stg_opts["monitoring"]
         usrrouts = stage_node.children
-        out_stage = self._out_type(parent, {}, rank=1)
+        out_stage = self._out_type(
+            parent,
+            {
+                "propagation_time": proptime,
+                "type": "evolution"
+                },
+            rank=1)
         parent.add_children((out_stage,))
 
         usr_timetable: dict[float, tuple[UserGraphNode]] = {}
@@ -169,5 +175,7 @@ class StageCompiler:
         complete_routines = itertools.chain.from_iterable(
             complete_timetable.values())
         out_stage.children = tuple(complete_routines)
+        out_stage.options.local.update(
+            {"num_routines": out_stage.num_routines})
 
         return out_stage

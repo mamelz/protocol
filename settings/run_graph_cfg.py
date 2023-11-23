@@ -14,19 +14,19 @@ RUN_GRAPH_CONFIG_DICT = {
         },
         "Stage": {
             "regular": {
-                "mandatory": {
-                    "routines": {
-                        "types": (list,)
-                    },
-                },
+#                "mandatory": {
+#                    "routines": {
+#                        "types": (list,)
+#                    },
+#                },
             },
             "evolution": {
                 "mandatory": {
                     "propagation_time": {
                         "types": (float,)
                     },
-                    "routines": {
-                        "types": (list,)
+                    "num_routines": {
+                        "types": (int,)
                     },
                 },
             },
