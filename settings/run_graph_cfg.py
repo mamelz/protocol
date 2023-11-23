@@ -91,6 +91,37 @@ RUN_GRAPH_CONFIG_DICT = {
                     }
                 }
             },
+            "monitoring": {
+                "mandatory": {
+                    "routine_name": {
+                        "types": (str,)
+                    },
+                    "time": {
+                        "types": (float,)
+                    },
+                    "args": {
+                        "types": (list,)
+                    },
+                    "description": {
+                        "types": (str,)
+                    },
+                    "kwargs": {
+                        "types": (dict,)
+                    },
+                    "live_tracking": {
+                        "types": (bool,)
+                    },
+                    "store": {
+                        "types": (bool,)
+                    },
+                    "store_token": {
+                        "types": (str,)
+                    },
+                    "tag": {
+                        "types": (str,)
+                    }
+                }
+            },
             "propagation": {
                 "mandatory": {
                     "time": {
@@ -131,6 +162,7 @@ RUN_GRAPH_CONFIG_DICT = {
         "Routine": {
             "regular": (),
             "evolution": (),
+            "monitoring": (),
             "propagation": ()
         }
     }

@@ -126,7 +126,7 @@ class StageCompiler:
             tdict = {
                 "tag": "MONITORING",
                 "time": time,
-                "type": "evolution"
+                "type": "monitoring"
                 }
             mon_routs = ()
             for opt in monroutopts:

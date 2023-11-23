@@ -46,23 +46,6 @@ class ExclusiveOptionsABC(UserDict, ABC):
     _KEYS: set
     _KIND: str
 
-#    def __new__(cls, node_config: dict):
-#        try:
-#            obj: tuple[str, dict] = tuple.__new__(
-#                cls, node_config[cls._KIND])
-#        except KeyError:
-#            obj: tuple[str, dict] = tuple.__new__(cls, ())
-#
-#        for d in obj:
-#            if not isinstance(d, dict):
-#                raise NodeConfigurationError
-#
-#            for k, v in d.items():
-#                if any(v.keys() - cls._KEYS):
-#                    raise NodeConfigurationError
-#
-#        return obj
-
     def __init__(self, node_config: dict):
         try:
             self.tuple: tuple[dict] = node_config[self._KIND]
@@ -97,24 +80,6 @@ class ExclusiveOptionsABC(UserDict, ABC):
 
         for k, v in relevant_opts.items():
             self._verify_option(k, v)
-
-#        non_default_keys = {
-#            k for k, v in relevant_opts.items() if v != self[k]["default"]}
-#        for group in self:
-#            common_keys = group.keys() & non_default_keys
-#            if len(common_keys) > 1:
-#                raise NodeConfigurationError("More than one exclusive option.")
-#            if len(common_keys) == 0:
-#                return
-#
-#            key = next(iter(common_keys))
-#            self._verify_option(key, node_opts[key])
-
-#    def keys(self) -> set[str]:
-#        keys = set()
-#        for d in self:
-#            keys |= d.keys()
-#        return keys
 
     def missing_keys(self, node_opts: dict) -> set[str]:
         return set(self.data.keys() - node_opts.keys())
@@ -152,19 +117,6 @@ class MandatoryExclusiveOptions(ExclusiveOptionsABC):
                 f"Option entry {key} has invalid type.")
 
 
-#    def _verify_option(self, opt_key, opt_val):
-#        for g in self:
-#            try:
-#                types = g[opt_key]["types"]
-#                break
-#            except KeyError:
-#                continue
-#
-#        if not isinstance(opt_val, types):
-#            raise NodeConfigurationError(
-#                f"Option entry {opt_key} has invalid type.")
-
-
 class OptionalOptions(MandatoryOptions):
 
     _KEYS = {"types", "default"}
@@ -189,20 +141,6 @@ class OptionalExclusiveOptions(MandatoryExclusiveOptions):
         super()._verify_option(key, val)
 
 
-#    def _verify_option(self, opt_key, opt_val):
-#        for g in self:
-#            try:
-#                types = g[opt_key]["types"]
-#                default = g[opt_key]["default"]
-#                break
-#            except KeyError:
-#                continue
-#
-#        if not (isinstance(opt_val, types) or opt_val == default):
-#            raise NodeConfigurationError(
-#                f"Option entry {opt_key} has invalid type.")
-
-
 class NodeOptions(UserDict):
 
     def __init__(self, mand, mand_ex, opt, opt_ex):
@@ -216,16 +154,6 @@ class NodeOptions(UserDict):
             **self._opt,
             **self._opt_ex.data
             }
-
-#    @property
-#    def all_keys(self):
-#        keys = set()
-#        keys |= self.mandatory.keys()
-#        keys |= self.mandatory_exclusive.keys()
-#        keys |= self.optional.keys()
-#        keys |= self.optional_exclusive.keys()
-#        keys |= {"type"}
-#        return keys
 
     @property
     def exclusive_keygroups(self) -> tuple[set[str]]:
@@ -504,4 +432,8 @@ class NodeConfigurationProcessor:
 
     def verify(self, node: GraphNode):
         spec = self.get_specification(node)
-        spec.options.verify(node.options.local)
+        try:
+            spec.options.verify(node.options.local)
+        except NodeConfigurationError as err:
+            err_str = f"Node {node}:\n{err.message}"
+            NodeConfigurationError(err_str)

@@ -9,4 +9,11 @@ class UserGraphNode(GraphNode, metaclass=GraphNodeMeta,
 
 
 class UserGraphRoot(GraphRoot, UserGraphNode, metaclass=GraphRootMeta):
-    pass
+
+    @property
+    def start_time(self) -> float:
+        return self.options["start_time"]
+
+    @start_time.setter
+    def start_time(self, new: float):
+        self.options["start_time"] = new
