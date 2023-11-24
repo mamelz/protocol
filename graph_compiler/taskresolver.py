@@ -1,6 +1,5 @@
 from . import errors
 from .graph_bases.user import UserGraphNode
-from ..graph.spec import GraphSpecification
 
 
 class TaskResolver:
@@ -8,9 +7,7 @@ class TaskResolver:
     routines in the parent's children.
     """
 
-    def __init__(self, user_graph_spec: GraphSpecification,
-                 predefined_tasks: dict[str, dict]):
-        self._spec = user_graph_spec
+    def __init__(self, predefined_tasks: dict[str, dict]):
         self._predef_tasks = predefined_tasks
         for task_opts in self._predef_tasks.values():
             if not isinstance(task_opts, dict):

@@ -80,6 +80,9 @@ class GraphBuilder(GraphProcessor):
             run_stages[i] = stagecompiler.compile(stage, rungraph)
 
         rungraph.children = tuple(run_stages)
+        self.runspec.processor.set_type(rungraph, True)
+        self.runspec.processor.set_options(rungraph, True)
+        self.runspec.processor.verify(rungraph, True)
 
         return rungraph
 
@@ -100,10 +103,7 @@ class Preprocessor(GraphProcessor):
 
     def __init__(self, predefined_tasks: dict[str, dict]):
         self._predef_tasks = predefined_tasks
-        self._taskresolver = TaskResolver(
-            self.userspec,
-            self._predef_tasks
-            )
+        self._taskresolver = TaskResolver(self._predef_tasks)
         self._userprocessor = NodeConfigurationProcessor(self.userspec)
 
     @check_input

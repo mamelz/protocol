@@ -73,10 +73,10 @@ class GraphNodeOptions(UserDict):
     nodes if it is not found in current node. However, setting and deleting
     options acts only on the current node.
     """
-    def __init__(self, node: GraphNode):
+    def __init__(self, node: GraphNode, node_options: dict):
         self._node = node
-        super().__init__(self._node._options)
-        self.data: dict = self._node._options
+        super().__init__(node_options)
+        self.data: dict = node_options
 
     def __str__(self):
         return str(self.data)

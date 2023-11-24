@@ -4,7 +4,7 @@ import numpy as np
 
 from . import errors
 from .graph_bases.run import RunGraphNode, RunGraphRoot
-from .graph_bases.user import UserGraphNode
+from .graph_bases.inter import InterGraphNode
 from ..graph.base import GraphNodeMeta
 from ..graph.errors import NodeConfigurationError
 from ..graph.spec import NodeConfigurationProcessor
@@ -25,7 +25,7 @@ class StageCompiler:
         self._out_config_proc = NodeConfigurationProcessor(
             self._out_type._GRAPH_SPEC)
 
-    def compile(self, stage_node: UserGraphNode,
+    def compile(self, stage_node: InterGraphNode,
                 parent: RunGraphRoot) -> RunGraphNode:
         if stage_node.rank_name() != "Stage":
             raise errors.StageCompilerError(
@@ -44,7 +44,7 @@ class StageCompiler:
             raise errors.StageCompilerError(
                 f"Unknown stage type {stage_node.type}")
 
-    def _compile_regular(self, stage_node: UserGraphNode,
+    def _compile_regular(self, stage_node: InterGraphNode,
                          parent: RunGraphRoot) -> RunGraphNode:
         routine_opts = (rout.options.local for rout in stage_node.children)
         stage_opts = {
@@ -63,25 +63,21 @@ class StageCompiler:
 
         return out_stage
 
-    def _compile_evolution(self, stage_node: UserGraphNode,
+    def _compile_evolution(self, interstage: InterGraphNode,
                            parent: RunGraphRoot) -> RunGraphNode:
-        out_rout_confproc = NodeConfigurationProcessor(self._out_rout_spec)
-        in_stg_opts = stage_node.options.local
-#        out_stg_opts = {
-#            k: in_stg_opts[k] for k in self._out_stg_keys["evolution"]
-#            }
+        # out_rout_confproc = NodeConfigurationProcessor(self._out_rout_spec)
+        in_stg_opts = interstage.options.local
         try:
-            start_time = stage_node.parent.options["start_time"]
+            start_time = interstage.parent.options["start_time"]
         except KeyError:
             start_time = 0.0
 
         proptime = in_stg_opts["propagation_time"]
         stop_time = start_time + proptime
-        stepsize = in_stg_opts["monitoring_stepsize"]
         numsteps = in_stg_opts["monitoring_numsteps"]
         monroutopts = in_stg_opts["monitoring"]
-        usrrouts = stage_node.children
-        out_stage = self._out_type(
+        usrrouts = interstage.children
+        out_stage: RunGraphNode = self._out_type(
             parent,
             {
                 "propagation_time": proptime,
@@ -90,7 +86,7 @@ class StageCompiler:
             rank=1)
         parent.add_children((out_stage,))
 
-        usr_timetable: dict[float, tuple[UserGraphNode]] = {}
+        usr_timetable: dict[float, tuple[InterGraphNode]] = {}
         for rout in usrrouts:
             opts = rout.options.local.copy()
             opts.update({"tag": "USER"})
@@ -112,18 +108,12 @@ class StageCompiler:
 
         usr_times = np.array(tuple(usr_timetable.keys()))
 
-        if stepsize is None and numsteps is None:
-            mon_times = ()
-        elif stepsize is not None:
-            mon_times = np.arange(start_time, stop_time, step=stepsize)
-            mon_times = np.concatenate([mon_times, np.array([stop_time])])
-        else:
-            mon_times = np.linspace(start_time,
-                                    stop_time,
-                                    numsteps,
-                                    endpoint=True)
+        mon_times = np.linspace(start_time,
+                                stop_time,
+                                numsteps,
+                                endpoint=True)
 
-        mon_timetable: dict[float, tuple[UserGraphNode]] = {}
+        mon_timetable: dict[float, tuple[InterGraphNode]] = {}
         for time in mon_times:
             tdict = {
                 "tag": "MONITORING",
@@ -163,10 +153,6 @@ class StageCompiler:
                 complete_timetable[time] += (prop_timetable[time],)
             except KeyError:
                 pass
-
-#        complete_timetable = {
-#            t: (*mon_timetable[t], *usr_timetable[t]) for t in rout_times
-#        }
 
         for t, rout in prop_timetable.items():
             try:

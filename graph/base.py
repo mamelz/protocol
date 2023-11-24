@@ -88,14 +88,8 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         self._rank = rank
         self._parent = parent
         self._children = NodeChildren(())
-        self._options = options
+        self.__options = options
         self._init_children()
-#            try:
-#                self._children = NodeChildren(
-#                    self._CHILD_TYPE(self, opts)
-#                    for opts in self._options[child_rankname])
-#            except KeyError:
-#                pass
 
     def __iter__(self):
         """Iterator cycling through all nodes of local graph."""
@@ -111,7 +105,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         if not self.isleaf:
             child_rankname = f"{self.rank_name(self.rank + 1).lower()}s"
             try:
-                ch_opts = self._options[child_rankname]
+                ch_opts = self.options.local[child_rankname]
                 ch_gen = (self.make_child(opt) for opt in ch_opts)
                 self.set_children(ch_gen, quiet=True)
             except KeyError:
@@ -136,7 +130,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         self._children.tuple = new
 
     @property
-    def spec(self):
+    def spec(self) -> GraphSpecification:
         if self.type is None:
             return None
 
@@ -186,7 +180,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
     def external_options(self) -> dict:
         """External routine options, not defined by yaml file."""
         try:
-            return self._options["external"]
+            return self.options.local["external"]
         except KeyError:
             if self.rank == 0:
                 raise KeyError("No external options set.")
@@ -238,7 +232,10 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     @property
     def options(self):
-        return GraphNodeOptions(self)
+        if not hasattr(self, "_options"):
+            self._node_options = GraphNodeOptions(self, self.__options)
+
+        return self._node_options
 
     @property
     def parent(self) -> Self:
@@ -257,7 +254,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
     @property
     def type(self) -> str:
         try:
-            return self._options["type"]
+            return self.options.local["type"]
         except KeyError:
             return None
 
@@ -266,7 +263,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         if self.type is not None:
             raise ValueError(
                 f"Node type already set to {self.type}")
-        self._options["type"] = new
+        self.options.local["type"] = new
 
     def _local_map(self) -> dict:
         """Return map of self and all subordinate nodes."""

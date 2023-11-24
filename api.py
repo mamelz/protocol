@@ -34,7 +34,7 @@ class _Performable(ABC):
         pass
 
     @abstractmethod
-    def setup(self):
+    def build(self):
         pass
 
     def _print_with_prefix(self, out_str):
@@ -203,7 +203,7 @@ class Protocol(_Performable):
             sch.perform()
             self.results[sch.label] = sch.results
 
-    def setup(self, schedule_labels: Sequence[str] = None,
+    def build(self, schedule_labels: Sequence[str] = None,
               start_time=None):
         """Set up schedules for execution.
 
@@ -271,14 +271,18 @@ class Schedule(_Performable):
         self.results: dict[str, dict[float, Any]] = {}
         self._routines: tuple[Routine] = ()
         self._system_initialized = False
-        if "start_time" not in self._user_graph._options:
+        if "start_time" not in self._user_graph.options.local:
             self.start_time = 0.0
 
     def __repr__(self) -> str:
         return self._map.values().__str__()
 
     @property
-    def _num_stages(self):
+    def num_routines(self):
+        return self._run_graph.num_routines
+
+    @property
+    def num_stages(self):
         return self._run_graph.num_stages
 
     @property
@@ -398,7 +402,7 @@ class Schedule(_Performable):
             schedule_name = f"'{self.label}'"
             text_prefix = " | ".join([
                 f"SCHEDULE {schedule_name:>6}:",
-                f"STAGE {stage_idx:>3}/{self._num_stages:<3}",
+                f"STAGE {stage_idx:>3}/{self.num_stages:<3}",
                 f"ROUTINE {i + 1:>{len(str(len(self._routines)))}}"
                 f"/{len(self._routines)}",
                 f"TIME {f'{self._system.time:.4f}':>10}",
@@ -422,8 +426,8 @@ class Schedule(_Performable):
                 self.results[output[0]].update(
                     {self._system.time: output[1]})
 
-    def setup(self, start_time=None):
-        """Set up the schedule for execution.
+    def build(self, start_time=None):
+        """Build the run graph and generate all routines.
 
         Args:
             start_time (float, optional): A start time to override the file
@@ -438,8 +442,8 @@ class Schedule(_Performable):
         if start_time is not None:
             self.start_time = start_time
 
-        builder = GraphBuilder(self._user_graph)
-        self._run_graph = builder.build()
+        builder = GraphBuilder()
+        self._run_graph = builder.build(self._user_graph)
         self._make_routines()
         for rout in self._routines:
             if rout.store_token in self._live_tracking:

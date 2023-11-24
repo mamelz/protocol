@@ -104,7 +104,7 @@ class MandatoryOptions(OptionsABC):
         types = self[key]["types"]
         if not isinstance(val, types):
             raise NodeConfigurationError(
-                f"Option entry {key} has invalid type.")
+                f"Option entry '{key}' has invalid type.")
 
 
 class MandatoryExclusiveOptions(ExclusiveOptionsABC):
@@ -202,8 +202,8 @@ class NodeOptions(UserDict):
         for opt in opts_tup:
             opt.check(node_opts)
 
-        unknown_keys = set(node_opts.keys() - self.keys())
-        if any(unknown_keys - {"type"}):
+        unknown_keys = set(node_opts.keys() - self.keys()) - {"type"}
+        if any(unknown_keys):
             raise NodeConfigurationError(
                 f"Unknown keys {unknown_keys}.")
 
@@ -226,7 +226,7 @@ class NodeOptions(UserDict):
             if not any(keys & node_opts.keys()):
                 ex_miss += (keys,)
 
-        if not any(nonex_miss) and not any(ex_miss):
+        if not any((*nonex_miss, *ex_miss)):
             return
 
         err_msg = ("Missing node options:\n"
@@ -466,4 +466,4 @@ class NodeConfigurationProcessor:
             spec.options.verify(node.options.local)
         except NodeConfigurationError as err:
             err_str = f"Node {node}:\n{err.message}"
-            NodeConfigurationError(err_str)
+            raise NodeConfigurationError(err_str)

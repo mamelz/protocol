@@ -57,7 +57,7 @@ RUN_GRAPH_CONFIG_DICT = {
                         "types": (float,)
                     },
                     "args": {
-                        "types": (list,)
+                        "types": (tuple,)
                     },
                     "description": {
                         "types": (str,)
@@ -86,27 +86,36 @@ RUN_GRAPH_CONFIG_DICT = {
                     },
                     "time": {
                         "types": (float,)
-                    },
+                    }
+                },
+                "optional": {
                     "args": {
-                        "types": (list,)
+                        "types": (tuple,),
+                        "default": ()
                     },
                     "description": {
-                        "types": (str,)
+                        "types": (str,),
+                        "default": "no description"
                     },
                     "kwargs": {
-                        "types": (dict,)
+                        "types": (dict,),
+                        "default": {}
                     },
                     "live_tracking": {
-                        "types": (bool,)
+                        "types": (bool,),
+                        "default": False
                     },
                     "store": {
-                        "types": (bool,)
+                        "types": (bool,),
+                        "default": True
                     },
                     "store_token": {
-                        "types": (str,)
+                        "types": (str,),
+                        "default": ""
                     },
                     "tag": {
-                        "types": (str,)
+                        "types": (str,),
+                        "default": "MONITORING"
                     }
                 }
             },
