@@ -7,7 +7,7 @@ INTER_GRAPH_CONFIG_DICT = {
             "default": {
                 "mandatory": {
                     "start_time": {
-                        "types": (float)
+                        "types": (float,)
                     }
                 }
             }

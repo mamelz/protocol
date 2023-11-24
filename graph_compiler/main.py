@@ -75,11 +75,13 @@ class GraphBuilder(GraphProcessor):
         rungraph = RunGraphRoot({})
         stagecompiler = self.compiler
 
-        run_stages = [None] * inter_graph.num_stages
+        # run_stages = [None] * inter_graph.num_stages
+        rungraph.virtual_stages = []
         for i, stage in enumerate(inter_graph.children):
-            run_stages[i] = stagecompiler.compile(stage, rungraph)
+            rungraph.virtual_stages += [stagecompiler.compile(stage, rungraph)]
 
-        rungraph.children = tuple(run_stages)
+        rungraph.children = rungraph.virtual_stages
+        del rungraph.virtual_stages
         self.runspec.processor.set_type(rungraph, True)
         self.runspec.processor.set_options(rungraph, True)
         self.runspec.processor.verify(rungraph, True)

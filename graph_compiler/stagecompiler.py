@@ -44,15 +44,15 @@ class StageCompiler:
             raise errors.StageCompilerError(
                 f"Unknown stage type {stage_node.type}")
 
-    def _compile_regular(self, stage_node: InterGraphNode,
+    def _compile_regular(self, interstage: InterGraphNode,
                          parent: RunGraphRoot) -> RunGraphNode:
-        routine_opts = (rout.options.local for rout in stage_node.children)
+        routine_opts = (rout.options.local for rout in interstage.children)
         stage_opts = {
             "routines": [
                 {k: rout_opdict[k] for k in self._out_rout_keys["regular"]}
                 for rout_opdict in routine_opts
                 ],
-            # "type": "regular"
+            "type": "regular"
             }
         out_stage = RunGraphNode(parent, stage_opts, rank=1)
         parent.add_children((out_stage,))
@@ -65,18 +65,21 @@ class StageCompiler:
 
     def _compile_evolution(self, interstage: InterGraphNode,
                            parent: RunGraphRoot) -> RunGraphNode:
-        # out_rout_confproc = NodeConfigurationProcessor(self._out_rout_spec)
         in_stg_opts = interstage.options.local
-        try:
-            start_time = interstage.parent.options["start_time"]
-        except KeyError:
-            start_time = 0.0
+        start_time = interstage.parent.options["start_time"]
+
+        if len(parent.virtual_stages) > 0:
+            start_time += parent.virtual_stages[
+                -1].options.local["propagation_time"]
 
         proptime = in_stg_opts["propagation_time"]
         stop_time = start_time + proptime
         numsteps = in_stg_opts["monitoring_numsteps"]
+
         monroutopts = in_stg_opts["monitoring"]
-        usrrouts = interstage.children
+        for opt in monroutopts:
+            if "store_token" not in opt:
+                opt["store_token"] = opt["routine_name"]
         out_stage: RunGraphNode = self._out_type(
             parent,
             {
@@ -86,10 +89,13 @@ class StageCompiler:
             rank=1)
         parent.add_children((out_stage,))
 
+        usrrouts = interstage.children
         usr_timetable: dict[float, tuple[InterGraphNode]] = {}
         for rout in usrrouts:
             opts = rout.options.local.copy()
             opts.update({"tag": "USER"})
+            if opts["store_token"] == "":
+                opts["store_token"] = opts["routine_name"]
             try:
                 time = rout.options["time"]
             except KeyError:
@@ -154,11 +160,16 @@ class StageCompiler:
             except KeyError:
                 pass
 
-        for t, rout in prop_timetable.items():
-            try:
-                complete_timetable[t] += (rout,)
-            except KeyError:
-                complete_timetable[t] = (rout,)
+#        save_last_opts = {
+#            "routine_name": "_return_state",
+#            "time": stop_time,
+#            "store_token": "State",
+#            "tag": "AUTOMATIC",
+#            "type": "evolution"
+#        }
+
+
+#        complete_timetable[rout_times[-1]] +=
 
         complete_routines = itertools.chain.from_iterable(
             complete_timetable.values())

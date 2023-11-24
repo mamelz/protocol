@@ -119,13 +119,13 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             new = tuple(iter(new))
 
         for node in new:
-            if node.parent is not self:
-                raise ValueError("New nodes must have self as parent.")
-
-        for node in new:
             if not isinstance(node, self._CHILD_TYPE):
                 raise TypeError(
                     f"Node {node} has incompatible type.")
+
+        for node in new:
+            if node.parent is not self:
+                raise ValueError("New nodes must have self as parent.")
 
         self._children.tuple = new
 

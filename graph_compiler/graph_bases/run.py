@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .run_spec import RUN_GRAPH_CONFIG_DICT
 from ...graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
 from ...graph.spec import GraphSpecification
@@ -11,7 +13,7 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
         return len(self.routines)
 
     @property
-    def routines(self):
+    def routines(self) -> tuple[RunGraphNode]:
         return self.leafs
 
     def _init_children(self):
@@ -25,5 +27,5 @@ class RunGraphRoot(GraphRoot, RunGraphNode, metaclass=GraphRootMeta):
         return len(self.stages)
 
     @property
-    def stages(self):
+    def stages(self) -> tuple[RunGraphNode]:
         return self.children

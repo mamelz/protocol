@@ -84,6 +84,9 @@ RUN_GRAPH_CONFIG_DICT = {
                     "routine_name": {
                         "types": (str,)
                     },
+                    "store_token": {
+                        "types": (str,)
+                    },
                     "time": {
                         "types": (float,)
                     }
@@ -108,10 +111,6 @@ RUN_GRAPH_CONFIG_DICT = {
                     "store": {
                         "types": (bool,),
                         "default": True
-                    },
-                    "store_token": {
-                        "types": (str,),
-                        "default": ""
                     },
                     "tag": {
                         "types": (str,),
