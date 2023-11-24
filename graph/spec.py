@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from abc import ABC, abstractmethod
 from collections import UserDict
+from dataclasses import dataclass, field
 
 from .errors import NodeConfigurationError
 
@@ -293,27 +294,29 @@ class RankSpecification:
         return self._types
 
 
+@dataclass(frozen=True)
 class GraphSpecification:
 
     _KEYS = {"ranks", "hierarchy", "allowed_children"}
+    _dict: dict[str, dict] = field()
 
-    def __init__(self, graph_config: dict):
-        if not graph_config.keys() == self._KEYS:
-            raise NodeConfigurationError
+#    def __init__(self, graph_config: dict[str, dict]):
+#        if not graph_config.keys() == self._KEYS:
+#            raise NodeConfigurationError
 
-        self._hierarchy = graph_config["hierarchy"]
-        self._ranks = {}
-        for rname, rdict in graph_config["ranks"].items():
-            rank_children = graph_config["allowed_children"][rname]
-            self._ranks[rname] = RankSpecification(rname, rdict, rank_children)
+#       self._dict = graph_config
 
     @property
     def hierarchy(self) -> dict[str, int]:
-        return self._hierarchy
+        return self._dict["hierarchy"]
 
     @property
     def ranks(self) -> dict[str, RankSpecification]:
-        return self._ranks
+        ranks = {}
+        for rname, rdict in self._dict["ranks"].items():
+            rank_children = self._dict["allowed_children"][rname]
+            ranks[rname] = RankSpecification(rname, rdict, rank_children)
+        return ranks
 
 
 class NodeConfigurationProcessor:

@@ -1,23 +1,32 @@
 from . import errors
 from .stagecompiler import StageCompiler
 from .taskresolver import TaskResolver
-from .graph_bases.run import RunGraphRoot
 from .graph_bases.user import UserGraphRoot
+from .graph_bases.inter import InterGraphRoot
+from .graph_bases.run import RunGraphRoot
 from ..graph.spec import NodeConfigurationProcessor
 
 
 class GraphCompiler:
 
-    def __init__(self, root: UserGraphRoot,
+    userspec = UserGraphRoot.graph_spec
+    interspec = InterGraphRoot.graph_spec
+    runspec = RunGraphRoot.graph_spec
+
+    def __init__(self, user_graph: UserGraphRoot,
                  predefined_tasks: dict[str, dict] = {}):
-        if not isinstance(root, UserGraphRoot):
+        if not isinstance(user_graph, UserGraphRoot):
             raise errors.GraphProcessorError(
                 "GraphProcessor must be initialized with an instance of"
-                f" {UserGraphRoot} but got {type(root)}.")
+                f" {UserGraphRoot} but got {type(user_graph)}.")
 
-        self._user_graph = root
-        self._preprocessed_graph = root.copy()
-        self._user_graph_spec = root.graph_spec
+        if user_graph.graph_spec is not self.userspec:
+            raise errors.GraphProcessorError(
+                f"Graph {user_graph} has unexpected specification."
+            )
+
+        self._user_graph = user_graph.copy()
+        self._inter_graph: InterGraphRoot = None
         self._predef_tasks = predefined_tasks
 
     def build(self) -> RunGraphRoot:
