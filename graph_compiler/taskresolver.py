@@ -1,5 +1,5 @@
 from . import errors
-from .user_graph import UserGraphNode
+from .graph_bases.user import UserGraphNode
 from ..graph.spec import GraphSpecification
 
 

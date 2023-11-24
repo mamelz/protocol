@@ -1,8 +1,8 @@
 from . import errors
 from .stagecompiler import StageCompiler
 from .taskresolver import TaskResolver
-from .run_graph import RunGraphRoot
-from .user_graph import UserGraphRoot
+from .graph_bases.run import RunGraphRoot
+from .graph_bases.user import UserGraphRoot
 from ..graph.spec import NodeConfigurationProcessor
 
 
@@ -25,7 +25,7 @@ class GraphCompiler:
         self.preprocess()
         graph = self.compile()
         specproc = NodeConfigurationProcessor(graph.graph_spec)
-        specproc.verify(graph)
+        specproc.verify(graph, graph=True)
         return graph
 
     def compile(self) -> RunGraphRoot:
@@ -35,7 +35,7 @@ class GraphCompiler:
         are constructed. Returns the compiled graph, an instance of
         RunGraphRoot.
         """
-        run_graph = RunGraphRoot({"stages": []})
+        run_graph = RunGraphRoot({})
         stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
                                       run_graph._CHILD_TYPE)
 
@@ -69,5 +69,4 @@ class GraphCompiler:
             confprocessor.set_options(node)
             confprocessor.verify(node)
 
-        for node in self._preprocessed_graph:
-            confprocessor.verify(node)
+        confprocessor.verify(node, graph=True)

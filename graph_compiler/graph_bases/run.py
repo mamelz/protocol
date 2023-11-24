@@ -1,6 +1,6 @@
-from ..graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
-from ..graph.spec import GraphSpecification
-from ..settings.run_graph_cfg import RUN_GRAPH_CONFIG_DICT
+from .run_spec import RUN_GRAPH_CONFIG_DICT
+from ...graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
+from ...graph.spec import GraphSpecification
 
 
 class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,

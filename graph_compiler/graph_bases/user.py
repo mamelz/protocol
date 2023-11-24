@@ -1,6 +1,6 @@
-from ..graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
-from ..graph.spec import GraphSpecification
-from ..settings.user_graph_cfg import USER_GRAPH_CONFIG_DICT
+from .user_spec import USER_GRAPH_CONFIG_DICT
+from ...graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
+from ...graph.spec import GraphSpecification
 
 
 class UserGraphNode(GraphNode, metaclass=GraphNodeMeta,

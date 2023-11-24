@@ -1,25 +1,13 @@
-RUN_GRAPH_CONFIG_DICT = {
+INTER_GRAPH_CONFIG_DICT = {
     "ranks": {
         "NONE": {
             "NONE": {}
         },
         "Schedule": {
-            "default": {
-                "mandatory": {
-                    "stages": {
-                        "types": (list,)
-                    },
-                }
+            "default": {}
             },
-        },
         "Stage": {
-            "regular": {
-#                "mandatory": {
-#                    "routines": {
-#                        "types": (list,)
-#                    },
-#                },
-            },
+            "regular": {},
             "evolution": {
                 "mandatory": {
                     "propagation_time": {

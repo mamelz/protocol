@@ -430,7 +430,14 @@ class NodeConfigurationProcessor:
         node.options.update(all_fetched)
         spec.options.verify(node.options.local)
 
-    def verify(self, node: GraphNode):
+    def verify(self, node: GraphNode, graph=False):
+        if not graph:
+            self._verify_local(node)
+        else:
+            for ch in node:
+                self._verify_local(ch)
+
+    def _verify_local(self, node: GraphNode):
         spec = self.get_specification(node)
         try:
             spec.options.verify(node.options.local)

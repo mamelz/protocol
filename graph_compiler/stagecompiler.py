@@ -3,8 +3,8 @@ import itertools
 import numpy as np
 
 from . import errors
-from .run_graph import RunGraphNode, RunGraphRoot
-from .user_graph import UserGraphNode
+from .graph_bases.run import RunGraphNode, RunGraphRoot
+from .graph_bases.user import UserGraphNode
 from ..graph.base import GraphNodeMeta
 from ..graph.errors import NodeConfigurationError
 from ..graph.spec import NodeConfigurationProcessor
@@ -16,10 +16,10 @@ class StageCompiler:
     def __init__(self, in_type: GraphNodeMeta, out_type: GraphNodeMeta):
         self._in_type = in_type
         self._out_type = out_type
-        out_rout_spec = self._out_type._GRAPH_SPEC.ranks["Routine"]
+        self._out_rout_spec = self._out_type._GRAPH_SPEC.ranks["Routine"]
         out_stg_spec = self._out_type._GRAPH_SPEC.ranks["Stage"]
         self._out_rout_keys = {
-            k: v.options.keys() for k, v in out_rout_spec.types.items()
+            k: v.options.keys() for k, v in self._out_rout_spec.types.items()
         }
         self._out_stg_keys = {k: v for k, v in out_stg_spec.types.items()}
         self._out_config_proc = NodeConfigurationProcessor(
@@ -65,6 +65,7 @@ class StageCompiler:
 
     def _compile_evolution(self, stage_node: UserGraphNode,
                            parent: RunGraphRoot) -> RunGraphNode:
+        out_rout_confproc = NodeConfigurationProcessor(self._out_rout_spec)
         in_stg_opts = stage_node.options.local
 #        out_stg_opts = {
 #            k: in_stg_opts[k] for k in self._out_stg_keys["evolution"]
@@ -101,6 +102,7 @@ class StageCompiler:
             opts["time"] = time
             outrout_opts = {
                 k: opts[k] for k in self._out_rout_keys["evolution"]}
+            outrout_opts.update({"type": "evolution"})
 
             out_rout = self._out_type(out_stage, outrout_opts, rank=2)
             if time not in usr_timetable:
