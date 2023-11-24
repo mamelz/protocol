@@ -318,6 +318,10 @@ class GraphSpecification:
             ranks[rname] = RankSpecification(rname, rdict, rank_children)
         return ranks
 
+    @property
+    def processor(self):
+        return NodeConfigurationProcessor(self)
+
 
 class NodeConfigurationProcessor:
 
@@ -369,7 +373,17 @@ class NodeConfigurationProcessor:
         else:
             raise NodeConfigurationError(f"Node {node} has invalid options.")
 
-    def set_type(self, node: GraphNode):
+    def process(self, node: GraphNode, graph=False):
+        self.set_type(node, graph)
+        self.set_options(node, graph)
+        self.verify(node, graph)
+
+    def set_type(self, node: GraphNode, graph=False):
+        if graph:
+            for ch in node:
+                self.set_type(ch)
+            return
+
         spec = self.get_specification(node)
         if isinstance(spec, tuple):
             raise NodeConfigurationError(
@@ -377,7 +391,12 @@ class NodeConfigurationProcessor:
         if node.type is None:
             node.type = spec.typename
 
-    def set_options(self, node: GraphNode):
+    def set_options(self, node: GraphNode, graph=False):
+        if graph:
+            for ch in node:
+                self.set_options(ch)
+            return
+
         spec = self.get_specification(node)
 
         mand_miss = spec.options.mandatory.missing_keys(node.options.local)
@@ -434,11 +453,12 @@ class NodeConfigurationProcessor:
         spec.options.verify(node.options.local)
 
     def verify(self, node: GraphNode, graph=False):
-        if not graph:
-            self._verify_local(node)
-        else:
+        if graph:
             for ch in node:
-                self._verify_local(ch)
+                self.verify(ch)
+            return
+
+        self._verify_local(node)
 
     def _verify_local(self, node: GraphNode):
         spec = self.get_specification(node)

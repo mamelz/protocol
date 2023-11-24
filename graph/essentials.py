@@ -78,6 +78,9 @@ class GraphNodeOptions(UserDict):
         super().__init__(self._node._options)
         self.data: dict = self._node._options
 
+    def __str__(self):
+        return str(self.data)
+
     def __getitem__(self, __key: str):
         try:
             return super().__getitem__(__key)

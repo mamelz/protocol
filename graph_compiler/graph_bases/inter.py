@@ -5,10 +5,20 @@ from ...graph.spec import GraphSpecification
 
 class InterGraphNode(GraphNode, metaclass=GraphNodeMeta,
                      graph_spec=GraphSpecification(INTER_GRAPH_CONFIG_DICT)):
-    pass
+
+    def _init_children(self):
+        pass
 
 
 class InterGraphRoot(GraphRoot, InterGraphNode, metaclass=GraphRootMeta):
+
+    @property
+    def num_stages(self):
+        return len(self.stages)
+
+    @property
+    def stages(self):
+        return self.children
 
     @property
     def start_time(self) -> float:

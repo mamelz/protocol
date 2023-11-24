@@ -14,6 +14,9 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
     def routines(self):
         return self.leafs
 
+    def _init_children(self):
+        pass
+
 
 class RunGraphRoot(GraphRoot, RunGraphNode, metaclass=GraphRootMeta):
 

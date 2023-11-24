@@ -19,11 +19,14 @@ class TaskResolver:
                     "task_name: task_options pairs."
                 )
 
-    def resolve(self, task_node: UserGraphNode):
+    def resolve(self, task_node: UserGraphNode, graph=False):
+        if graph:
+            for ch in task_node:
+                self.resolve(ch)
+            return
+
         if task_node.rank_name() != "Task":
-            raise errors.TaskResolverError(
-                ".resolve() has been called"
-                f" with a non-task node: {task_node}")
+            return
 
         if task_node.type == "default":
             self._resolve_default(task_node)

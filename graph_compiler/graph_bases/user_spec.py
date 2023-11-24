@@ -106,7 +106,7 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -122,11 +122,11 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                     "tag": {
                         "types": (str,),
-                        "default": None
+                        "default": "USER"
                     }
                 }
             },
@@ -153,7 +153,7 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -169,11 +169,11 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                     "tag": {
                         "types": (str,),
-                        "default": None
+                        "default": "USER"
                     }
                 }
             },
@@ -190,7 +190,7 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -206,7 +206,7 @@ USER_GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                 }
             },

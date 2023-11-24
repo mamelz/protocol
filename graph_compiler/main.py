@@ -1,81 +1,179 @@
+from __future__ import annotations
+
+import functools
+import typing
+from abc import ABC
+
+import numpy as np
+
 from . import errors
 from .stagecompiler import StageCompiler
 from .taskresolver import TaskResolver
-from .graph_bases.user import UserGraphRoot
-from .graph_bases.inter import InterGraphRoot
+from .graph_bases.user import UserGraphRoot, UserGraphNode
+from .graph_bases.inter import InterGraphRoot, InterGraphNode
 from .graph_bases.run import RunGraphRoot
-from ..graph.spec import NodeConfigurationProcessor
+from ..graph.base import GraphRoot
+from ..graph.spec import NodeConfigurationProcessor, GraphSpecification
 
 
-class GraphCompiler:
+def check_input(method):
+    input_type = tuple(typing.get_type_hints(method).values())[0]
+
+    @functools.wraps(method)
+    def wrapped(obj: GraphProcessor, input_graph, **kwargs):
+        if not isinstance(input_graph, input_type):
+            raise TypeError
+        return method(obj, input_graph, **kwargs)
+    return wrapped
+
+
+class GraphProcessor(ABC):
 
     userspec = UserGraphRoot.graph_spec
+    intercls = InterGraphRoot
     interspec = InterGraphRoot.graph_spec
+    runcls = RunGraphRoot
     runspec = RunGraphRoot.graph_spec
 
-    def __init__(self, user_graph: UserGraphRoot,
-                 predefined_tasks: dict[str, dict] = {}):
-        if not isinstance(user_graph, UserGraphRoot):
-            raise errors.GraphProcessorError(
-                "GraphProcessor must be initialized with an instance of"
-                f" {UserGraphRoot} but got {type(user_graph)}.")
+    @classmethod
+    @property
+    def specs(cls) -> tuple[GraphSpecification]:
+        return (cls.userspec, cls.interspec, cls.runspec)
 
-        if user_graph.graph_spec is not self.userspec:
+    def _check(self, graph: GraphRoot):
+        if graph.graph_spec not in self.specs:
             raise errors.GraphProcessorError(
-                f"Graph {user_graph} has unexpected specification."
+                "Unknown specification."
             )
 
-        self._user_graph = user_graph.copy()
-        self._inter_graph: InterGraphRoot = None
+        if not isinstance(graph, GraphRoot):
+            raise errors.GraphProcessorError(
+                f"Graph {graph} must be GraphRoot instance."
+            )
+
+
+class GraphBuilder(GraphProcessor):
+
+    def __init__(self, predefined_tasks: dict[str, dict] = {}):
         self._predef_tasks = predefined_tasks
+        self.preprocessor = Preprocessor(self._predef_tasks)
+        self.compiler = StageCompiler(self.intercls._CHILD_TYPE,
+                                      self.runcls._CHILD_TYPE)
 
-    def build(self) -> RunGraphRoot:
-        """Preprocess, compile, verify and return."""
-        self.preprocess()
-        graph = self.compile()
-        specproc = NodeConfigurationProcessor(graph.graph_spec)
-        specproc.verify(graph, graph=True)
-        return graph
+    @check_input
+    def preprocess(self, user_graph: UserGraphRoot):
+        return self.preprocessor.process(user_graph)
 
-    def compile(self) -> RunGraphRoot:
-        """Compile the user graph to a run graph.
+    @check_input
+    def compile(self, inter_graph: InterGraphRoot) -> RunGraphRoot:
+        """Compile an inter graph to a run graph.
 
         During compilation, all implicit routines like propagation routines
         are constructed. Returns the compiled graph, an instance of
         RunGraphRoot.
         """
-        run_graph = RunGraphRoot({})
-        stagecompiler = StageCompiler(self._preprocessed_graph._CHILD_TYPE,
-                                      run_graph._CHILD_TYPE)
+        rungraph = RunGraphRoot({})
+        stagecompiler = self.compiler
 
-        run_stages = [None] * self._preprocessed_graph.num_children
-        for i, stage in enumerate(self._preprocessed_graph.children):
-            run_stages[i] = stagecompiler.compile(stage, run_graph)
+        run_stages = [None] * inter_graph.num_stages
+        for i, stage in enumerate(inter_graph.children):
+            run_stages[i] = stagecompiler.compile(stage, rungraph)
 
-        run_graph.children = tuple(run_stages)
+        rungraph.children = tuple(run_stages)
 
-        return run_graph
+        return rungraph
 
-    def preprocess(self):
-        """Process the user graph node options.
+    @check_input
+    def build(self, user_graph: UserGraphRoot) -> RunGraphRoot:
+        """Preprocess, compile, verify and return."""
+        if not isinstance(user_graph, UserGraphRoot):
+            raise TypeError
 
-        Checks the user graph for validity and sets missing node options
-        to their default values.
+        intergraph = self.preprocess(user_graph)
+        rungraph = self.compile(intergraph)
+        self.runspec.processor.verify(rungraph, True)
+
+        return rungraph
+
+
+class Preprocessor(GraphProcessor):
+
+    def __init__(self, predefined_tasks: dict[str, dict]):
+        self._predef_tasks = predefined_tasks
+        self._taskresolver = TaskResolver(
+            self.userspec,
+            self._predef_tasks
+            )
+        self._userprocessor = NodeConfigurationProcessor(self.userspec)
+
+    @check_input
+    def process(self, user_graph: UserGraphRoot) -> InterGraphRoot:
+        """Preprocess the user graph.
         """
-        taskresolver = TaskResolver(self._user_graph_spec, self._predef_tasks)
-        confprocessor = NodeConfigurationProcessor(self._user_graph_spec)
+        self._userprocessor.set_type(user_graph, graph=True)
+        self._taskresolver.resolve(user_graph, graph=True)
+        self._userprocessor.set_options(user_graph, graph=True)
+        self._userprocessor.verify(user_graph, graph=True)
 
-        for node in self._preprocessed_graph:
-            confprocessor.set_type(node)
+        intergraph = self.intercls(
+            {
+                "start_time": user_graph.options["start_time"]
+                }
+            )
 
-        for node in self._preprocessed_graph:
-            if node.rank == 2:
-                assert node.rank_name() == "Task"
-                taskresolver.resolve(node)
+        self._translate(user_graph, intergraph)
+        self.interspec.processor.process(intergraph, True)
 
-        for node in self._preprocessed_graph:
-            confprocessor.set_type(node)
-            confprocessor.set_options(node)
-            confprocessor.verify(node)
+        return intergraph
 
-        confprocessor.verify(node, graph=True)
+    def _translate_routines(self, userstage: UserGraphNode,
+                            interstage: InterGraphNode):
+        assert interstage.num_children == 0
+
+        def routines_gen():
+            for uroutine in userstage.children:
+                assert uroutine.rank_name() == "Routine"
+                ispec = self.interspec.ranks["Routine"].types[uroutine.type]
+                opts = {
+                    k: uroutine.options[k] for k in ispec.options.keys()
+                }
+
+                yield InterGraphNode(interstage, opts)
+
+        interstage.children = iter(routines_gen())
+
+    def _translate(self, usergraph: UserGraphRoot,
+                   intergraph: InterGraphRoot):
+        for stage in usergraph.children:
+            interopts = self._get_inter_opts_stage(stage)
+            intergraph.add_children_from_options(interopts)
+
+        for ustage, istage in zip(usergraph.stages, intergraph.stages):
+            assert istage.num_children == 0
+            self._translate_routines(ustage, istage)
+
+    def _get_inter_opts_stage(self, stage: UserGraphNode) -> dict:
+        if stage.type == "regular":
+            return {"num_routines": stage.num_children}
+
+        useropts = stage.options.local
+        interopts = {
+            "propagation_time": useropts["propagation_time"],
+            "monitoring": useropts["monitoring"]
+            }
+
+        if useropts["monitoring_numsteps"] is not None:
+            numsteps = useropts["monitoring_numsteps"]
+        elif useropts["monitoring_stepsize"] is not None:
+            times = np.arange(0.0, interopts["propagation_time"],
+                              step=useropts["monitoring_stepsize"])
+            numsteps = len(times)
+
+        interopts.update(
+            {"monitoring_numsteps": numsteps})
+
+        interopts.update(
+            {"num_routines": stage.num_children}
+        )
+
+        return interopts

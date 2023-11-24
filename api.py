@@ -12,7 +12,7 @@ from typing import Any, Sequence
 
 from .graph_compiler.graph_bases.user import UserGraphRoot
 from .graph_compiler.graph_bases.run import RunGraphRoot
-from .graph_compiler.main import GraphCompiler
+from .graph_compiler.main import GraphBuilder
 from .routines import (
     Routine,
     EvolutionRegularRoutine,
@@ -438,8 +438,8 @@ class Schedule(_Performable):
         if start_time is not None:
             self.start_time = start_time
 
-        compiler = GraphCompiler(self._user_graph)
-        self._run_graph = compiler.build()
+        builder = GraphBuilder(self._user_graph)
+        self._run_graph = builder.build()
         self._make_routines()
         for rout in self._routines:
             if rout.store_token in self._live_tracking:

@@ -5,10 +5,16 @@ from ...graph.spec import GraphSpecification
 
 class UserGraphNode(GraphNode, metaclass=GraphNodeMeta,
                     graph_spec=GraphSpecification(USER_GRAPH_CONFIG_DICT)):
-    pass
+
+    def _init_children(self):
+        return super()._init_children()
 
 
 class UserGraphRoot(GraphRoot, UserGraphNode, metaclass=GraphRootMeta):
+
+    @property
+    def stages(self):
+        return self.children
 
     @property
     def start_time(self) -> float:

@@ -16,10 +16,9 @@ import itertools
 import json
 from abc import (
     ABCMeta,
-    # abstractmethod,
-    # abstractclassmethod
+    abstractmethod,
     )
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from itertools import chain
 
@@ -80,8 +79,8 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     @classmethod
     @property
-    def graph_spec(self):
-        return self._GRAPH_SPEC
+    def graph_spec(cls):
+        return cls._GRAPH_SPEC
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None):
         if rank is None:
@@ -90,31 +89,58 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         self._parent = parent
         self._children = NodeChildren(())
         self._options = options
-        if not self.isleaf:
-            try:
-                self._children = NodeChildren(
-                    self._CHILD_TYPE(self, opts) for opts in self._options[
-                        f"{self.rank_name(self.rank + 1).lower()}s"])
-            except KeyError:
-                pass
+        self._init_children()
+#            try:
+#                self._children = NodeChildren(
+#                    self._CHILD_TYPE(self, opts)
+#                    for opts in self._options[child_rankname])
+#            except KeyError:
+#                pass
 
     def __iter__(self):
         """Iterator cycling through all nodes of local graph."""
         return iter(self.map.values())
 
     def __repr__(self) -> str:
-        return (f"{type(self)}: {self.rank_name(self.rank).capitalize()}:"
-                f" {self.ID}")
+        return (
+            f"{type(self).__name__}: {self.rank_name(self.rank).capitalize()}:"
+            f" {self.ID}")
 
-    def _set_children_tuple(self, new: Sequence[GraphNode]):
+    @abstractmethod
+    def _init_children(self):
+        if not self.isleaf:
+            child_rankname = f"{self.rank_name(self.rank + 1).lower()}s"
+            try:
+                ch_opts = self._options[child_rankname]
+                ch_gen = (self.make_child(opt) for opt in ch_opts)
+                self.set_children(ch_gen, quiet=True)
+            except KeyError:
+                pass
+
+    def make_child(self, opts: dict) -> GraphNodeMeta:
+        return self._CHILD_TYPE(self, opts)
+
+    def _set_children_tuple(self, new: Iterable[GraphNode]):
         if not isinstance(new, tuple):
-            new = tuple(*new)
+            new = tuple(iter(new))
 
         for node in new:
             if node.parent is not self:
                 raise ValueError("New nodes must have self as parent.")
 
+        for node in new:
+            if not isinstance(node, self._CHILD_TYPE):
+                raise TypeError(
+                    f"Node {node} has incompatible type.")
+
         self._children.tuple = new
+
+    @property
+    def spec(self):
+        if self.type is None:
+            return None
+
+        return self.graph_spec.ranks[self.rank_name()].types[self.type]
 
     @property
     def children(self) -> tuple[GraphNode]:
@@ -286,15 +312,18 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             parent = parent._parent
         return parent
 
-    def goto(self, target_id: GraphNodeID | Sequence) -> Self:
+    def goto(self, *target_id: tuple[int]) -> Self:
         """Return node with given ID."""
+        if not isinstance(target_id, tuple):
+            raise TypeError
+
         common_rank = 0
         for i, (j, k) in tuple(enumerate(zip(self.ID, target_id)))[1:]:
             if j != k:
                 common_rank = i - 1
                 break
         node = self.parent_of_rank(common_rank)
-        for idx in tuple(target_id)[common_rank + 1:]:
+        for idx in target_id[common_rank + 1:]:
             node = node.children[idx]
         return node
 
@@ -371,7 +400,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                                       children_right)
         self.children = tuple(itertools.chain.from_iterable(complete_it))
 
-    def set_children(self, new: Sequence[GraphNode], quiet=False):
+    def set_children(self, new: Iterable[GraphNode], quiet=False):
         """Set children to tuple of nodes. If 'quiet' is True,
         the child mutation will not be registered at the root.
         """

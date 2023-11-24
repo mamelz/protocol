@@ -4,20 +4,38 @@ INTER_GRAPH_CONFIG_DICT = {
             "NONE": {}
         },
         "Schedule": {
-            "default": {}
-            },
+            "default": {
+                "mandatory": {
+                    "start_time": {
+                        "types": (float)
+                    }
+                }
+            }
+        },
         "Stage": {
-            "regular": {},
+            "regular": {
+                "mandatory": {
+                    "num_routines": {
+                        "types": (int,)
+                    }
+                }
+            },
             "evolution": {
                 "mandatory": {
                     "propagation_time": {
                         "types": (float,)
                     },
-                    "num_routines": {
+                    "monitoring": {
+                        "types": (list,)
+                    },
+                    "monitoring_numsteps": {
                         "types": (int,)
                     },
-                },
-            },
+                    "num_routines": {
+                        "types": (int,)
+                    }
+                }
+            }
         },
         "Routine": {
             "regular": {
@@ -57,7 +75,7 @@ INTER_GRAPH_CONFIG_DICT = {
                         "types": (float,)
                     },
                     "args": {
-                        "types": (list,)
+                        "types": (tuple,)
                     },
                     "description": {
                         "types": (str,)
@@ -136,15 +154,15 @@ INTER_GRAPH_CONFIG_DICT = {
         },
         "Schedule": {
             "default": {
-                "Stage": ("default",),
+                "Stage": ("regular", "evolution"),
             }
         },
         "Stage": {
             "regular": {
-                "Routine": ("regular")
+                "Routine": ("regular",)
             },
             "evolution": {
-                "Routine": ("evolution", "propagation")
+                "Routine": ("evolution",)
             }
         },
         "Routine": {
