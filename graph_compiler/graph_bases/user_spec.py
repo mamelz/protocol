@@ -1,20 +1,18 @@
-"""General library settings."""
-import os
-
-
-_FUNCTIONS_PATH = os.getenv("PROTOCOL_FUNCTIONS_PATH")
-_GRAPH_CONFIG_DICT = {
+USER_GRAPH_CONFIG_DICT = {
     "ranks": {
+        "NONE": {
+            "NONE": {}
+        },
         "Schedule": {
             "default": {
-                "mandatory": {},
+                "mandatory": {
+                    "stages": {
+                        "types": (list,)
+                    }
+                },
                 "optional": {
                     "global_options": {
                         "types": (dict,),
-                        "default": {}
-                    },
-                    "stages": {
-                        "types": (list,),
                         "default": {}
                     },
                     "start_time": {
@@ -33,7 +31,7 @@ _GRAPH_CONFIG_DICT = {
                         "default": {}
                     },
                     "tasks": {
-                        "types": (dict,),
+                        "types": (list,),
                         "default": {}
                     },
                 }
@@ -58,20 +56,18 @@ _GRAPH_CONFIG_DICT = {
                         "default": []
                     }
                 },
-                "optional-exclusive": [
+                "optional-exclusive": (
                     {
                         "monitoring_stepsize": {
                             "types": (float,),
                             "default": None
-                        }
-                    },
-                    {
+                            },
                         "monitoring_numsteps": {
                             "types": (int,),
                             "default": None
-                        }
-                    }
-                ]
+                            }
+                    },
+                )
             }
         },
         "Task": {
@@ -87,6 +83,13 @@ _GRAPH_CONFIG_DICT = {
                         "default": []
                     }
                 }
+            },
+            "predefined": {
+                "mandatory": {
+                    "task_name": {
+                        "types": (str,)
+                    }
+                },
             }
         },
         "Routine": {
@@ -103,7 +106,7 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -119,11 +122,11 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                     "tag": {
                         "types": (str,),
-                        "default": None
+                        "default": "USER"
                     }
                 }
             },
@@ -131,11 +134,18 @@ _GRAPH_CONFIG_DICT = {
                 "mandatory": {
                     "routine_name": {
                         "types": (str,),
-                    },
-                    "time": {
-                        "types": (float,),
                     }
                 },
+                "mandatory-exclusive": (
+                    {
+                        "time": {
+                            "types": (float,)
+                        },
+                        "localtime": {
+                            "types": (float,)
+                        }
+                    },
+                ),
                 "optional": {
                     "args": {
                         "types": (list,),
@@ -143,7 +153,7 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -159,11 +169,11 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                     "tag": {
                         "types": (str,),
-                        "default": None
+                        "default": "USER"
                     }
                 }
             },
@@ -180,7 +190,7 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "description": {
                         "types": (str,),
-                        "default": None
+                        "default": "no description"
                     },
                     "kwargs": {
                         "types": (dict,),
@@ -196,7 +206,7 @@ _GRAPH_CONFIG_DICT = {
                     },
                     "store_token": {
                         "types": (str,),
-                        "default": None
+                        "default": ""
                     },
                 }
             },
@@ -216,15 +226,16 @@ _GRAPH_CONFIG_DICT = {
         }
     },
     "hierarchy": {
-        0: "Schedule",
-        1: "Stage",
-        2: "Task",
-        3: "Routine"
+        "NONE": -1,
+        "Schedule": 0,
+        "Stage": 1,
+        "Task": 2,
+        "Routine": 3
     },
-    "allowed_types": {
+    "allowed_children": {
         "NONE": {
             "NONE": {
-                "Schedule"
+                "Schedule": ("default",)
             }
         },
         "Schedule": {
@@ -246,55 +257,18 @@ _GRAPH_CONFIG_DICT = {
         },
         "Task": {
             "default": {
+                "Task": ("default",
+                         "predefined"),
                 "Routine": ("evolution",
-                            "monitoring",
-                            "propagation",
                             "regular")
-            }
+            },
+            "predefined": ()
+        },
+        "Routine": {
+            "regular": (),
+            "evolution": (),
+            "monitoring": (),
+            "propagation": ()
         }
     }
 }
-
-_SETTINGS = {
-    "VERBOSE": False,
-    "FUNCTIONS_PATH": _FUNCTIONS_PATH,
-    "GRAPH_CONFIG": _GRAPH_CONFIG_DICT
-}
-
-
-class Settings:
-    """Class for general library settings."""
-    VERBOSE: bool = False
-    FUNCTIONS_PATH: str = None
-    GRAPH_CONFIG: dict
-
-    def __init__(self, dict: dict):
-        self._settings = dict
-        self._set_options_from_dict()
-        for key in self.__annotations__:
-            setattr(self, key, self._settings[key])
-
-    def _set_options_from_dict(self):
-        for key, opt in self._settings.items():
-            if key not in self.__annotations__:
-                raise KeyError(f"Unknown settings key '{key}'.")
-            setattr(self, key, opt)
-        return
-
-    def check(self):
-        """Check if library settings are complete. Returns bool."""
-        _missing = ()
-        for key in self.__annotations__:
-            if getattr(self, key) is None:
-                _missing += (key,)
-        if len(_missing) > 0:
-            print(f"Missing settings: {[key for key in _missing]}")
-            return False
-        return True
-
-    def set_option(self, key, value):
-        self._settings[key] = value
-        self._set_options_from_dict()
-
-
-SETTINGS = Settings(_SETTINGS)

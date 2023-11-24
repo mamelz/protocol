@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .graph.core import GraphRoot
+    pass
 
 import sys
 import textwrap
@@ -10,8 +10,9 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .graph import GraphNode, GraphNodeNONE
-from . import preprocessor
+from .graph_compiler.graph_bases.user import UserGraphRoot
+from .graph_compiler.graph_bases.run import RunGraphRoot
+from .graph_compiler.main import GraphBuilder
 from .routines import (
     Routine,
     EvolutionRegularRoutine,
@@ -33,7 +34,7 @@ class _Performable(ABC):
         pass
 
     @abstractmethod
-    def setup(self):
+    def build(self):
         pass
 
     def _print_with_prefix(self, out_str):
@@ -202,7 +203,7 @@ class Protocol(_Performable):
             sch.perform()
             self.results[sch.label] = sch.results
 
-    def setup(self, schedule_labels: Sequence[str] = None,
+    def build(self, schedule_labels: Sequence[str] = None,
               start_time=None):
         """Set up schedules for execution.
 
@@ -233,7 +234,7 @@ class Schedule(_Performable):
             label (str, optional): Label for the schedule. Defaults to None.
 
         Returns:
-            Schedule | list[Schedule]: The schedule(s).
+            Schedule | tuple[Schedule]: Schedule or tuple of schedule objects.
         """
         with open(yaml_path, "r") as stream:
             config = yaml.safe_load(stream)
@@ -244,7 +245,10 @@ class Schedule(_Performable):
             sched_cfg = config
 
         if len(sched_cfg) > 1:
-            return [cls(cfg, label) for cfg in sched_cfg]
+            if label is not None:
+                raise ValueError("When mutiple schedules are defined, label"
+                                 " must be None")
+            return (cls(cfg, label) for cfg in sched_cfg)
 
         return cls(sched_cfg[0], label)
 
@@ -252,12 +256,13 @@ class Schedule(_Performable):
         """Construct schedule from configuration dictionary."""
         super().__init__()
         self._configuration = configuration
-        self._root_node: GraphRoot = GraphNode(GraphNodeNONE(), configuration)
+        self._user_graph = UserGraphRoot(configuration)
+        self._run_graph: RunGraphRoot = None
         if label is not None:
             self.label = label
         else:
             try:
-                self.label = self.root._options["label"]
+                self.label = self._user_graph.options["label"]
             except KeyError:
                 self.label = "no_label"
 
@@ -266,32 +271,28 @@ class Schedule(_Performable):
         self.results: dict[str, dict[float, Any]] = {}
         self._routines: tuple[Routine] = ()
         self._system_initialized = False
-        if "start_time" not in self.root._options:
+        if "start_time" not in self._user_graph.options.local:
             self.start_time = 0.0
 
     def __repr__(self) -> str:
         return self._map.values().__str__()
 
     @property
-    def _map(self):
-        return self.root.map
+    def num_routines(self):
+        return self._run_graph.num_routines
 
     @property
-    def _num_stages(self):
-        return len(list(self.root.get_generation(1)))
-
-    @property
-    def root(self) -> GraphRoot:
-        return self._root_node
+    def num_stages(self):
+        return self._run_graph.num_stages
 
     @property
     def start_time(self) -> float:
         """The initial time of the system."""
-        return self.root._options["start_time"]
+        return self._user_graph.start_time
 
     @start_time.setter
-    def start_time(self, new):
-        self.root._options["start_time"] = new
+    def start_time(self, new: float):
+        self._user_graph.start_time = new
         if self._system_initialized:
             self._reinitialize_system()
 
@@ -300,23 +301,26 @@ class Schedule(_Performable):
             raise ValueError("System must be initialized, first."
                              " Call .initialize_system().")
         system = self._system
-        routines = [None]*len(self.root.leafs)
-        for i, node in enumerate(self.root.leafs):
-            stage_idx = node.parent_of_rank(1).ID.local + 1
-            if node.type == "propagation":
-                routine = PropagationRoutine(node._options)
+        routines = [None]*self._run_graph.num_routines
+        for i, routnode in enumerate(self._run_graph.routines):
+            stage_idx = routnode.parent.ID.local + 1
+            if routnode.type == "propagation":
+                routine = PropagationRoutine(routnode.options.local)
                 routine.stage_idx = stage_idx
                 routines[i] = routine
-            elif node.type == "evolution":
-                routine = EvolutionRegularRoutine(node._options, system)
+            elif routnode.type == "evolution":
+                routine = EvolutionRegularRoutine(routnode.options.local,
+                                                  system)
                 routine.stage_idx = stage_idx
                 routines[i] = routine
-            elif node.type == "monitoring":
-                routine = MonitoringRoutine(node._options, system)
+            elif routnode.type == "monitoring":
+                routine = MonitoringRoutine(routnode.options.local,
+                                            system)
                 routine.stage_idx = stage_idx
                 routines[i] = routine
-            elif node.type == "regular":
-                routine = RegularRoutine(node._options, system)
+            elif routnode.type == "regular":
+                routine = RegularRoutine(routnode.options.local,
+                                         system)
                 routine.stage_idx = stage_idx
                 routines[i] = routine
 
@@ -398,7 +402,7 @@ class Schedule(_Performable):
             schedule_name = f"'{self.label}'"
             text_prefix = " | ".join([
                 f"SCHEDULE {schedule_name:>6}:",
-                f"STAGE {stage_idx:>3}/{self._num_stages:<3}",
+                f"STAGE {stage_idx:>3}/{self.num_stages:<3}",
                 f"ROUTINE {i + 1:>{len(str(len(self._routines)))}}"
                 f"/{len(self._routines)}",
                 f"TIME {f'{self._system.time:.4f}':>10}",
@@ -422,8 +426,8 @@ class Schedule(_Performable):
                 self.results[output[0]].update(
                     {self._system.time: output[1]})
 
-    def setup(self, start_time=None):
-        """Set up the schedule for execution.
+    def build(self, start_time=None):
+        """Build the run graph and generate all routines.
 
         Args:
             start_time (float, optional): A start time to override the file
@@ -438,7 +442,8 @@ class Schedule(_Performable):
         if start_time is not None:
             self.start_time = start_time
 
-        preprocessor.process_graph(self.root)
+        builder = GraphBuilder()
+        self._run_graph = builder.build(self._user_graph)
         self._make_routines()
         for rout in self._routines:
             if rout.store_token in self._live_tracking:

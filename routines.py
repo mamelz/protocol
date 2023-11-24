@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .core import _System
+    from .api import _System
 
 import importlib.util
 import os
