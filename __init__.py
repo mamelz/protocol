@@ -5,9 +5,3 @@ if not SETTINGS.check():
     raise ValueError("Package not configured yet.")
 
 from .api import Protocol, Schedule
-
-
-__all__ = [
-    "Protocol",
-    "Schedule"
-    ]
