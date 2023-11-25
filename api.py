@@ -10,9 +10,9 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .graph_compiler.graph_bases.user import UserGraphRoot
-from .graph_compiler.graph_bases.run import RunGraphRoot
-from .graph_compiler.main import GraphBuilder
+from .builder.graph_bases.user import UserGraphRoot
+from .builder.graph_bases.run import RunGraphRoot
+from .builder.main import GraphBuilder
 from .routines import (
     Routine,
     EvolutionRegularRoutine,
@@ -216,7 +216,7 @@ class Protocol(_Performable):
                 configuration. Defaults to None.
         """
         for sch in self._select_schedules(schedule_labels):
-            sch.setup(start_time)
+            sch.build(start_time)
 
 
 class Schedule(_Performable):
