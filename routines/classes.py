@@ -4,31 +4,22 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from .api import _System
+    from ..api import _System
 
 import importlib.util
 import os
 from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 
-from .settings import SETTINGS
+from .errors import RoutineInitializationError
+from ..settings import SETTINGS
 
 
 _functions_path = os.path.abspath(SETTINGS.FUNCTIONS_PATH)
 _functions_spec = importlib.util.spec_from_file_location(
    "functions", _functions_path)
 _FUNCTIONS_MODULE = importlib.util.module_from_spec(_functions_spec)
-# sys.modules["functions"] = _functions_module
 _functions_spec.loader.exec_module(_FUNCTIONS_MODULE)
-
-
-class RoutineInitializationError(Exception):
-    message = "Error during initialization of routine."
-
-    def __init__(self, message=None):
-        if message is not None:
-            self.message = message
-        super().__init__()
 
 
 class RoutineFunction:
@@ -163,6 +154,7 @@ class RegularRoutine(Routine):
         for key in self.passed_kwargs:
             if key not in self._rfunction.kwargs:
                 unknown.add(key)
+
         if any(unknown):
             raise RoutineInitializationError(
                 f"Unknown keyword arguments: {unknown}.")
@@ -236,11 +228,12 @@ class PropagationRoutine(Routine):
 
     def __init__(self, options):
         super().__init__(options)
+        self._step = self._options["step"]
 
     def __call__(self, system: _System):
-        system.propagate(self._options["step"])
+        system.propagate(self._step)
         return
 
     @property
     def timestep(self):
-        return self._options["step"]
+        return self._step
