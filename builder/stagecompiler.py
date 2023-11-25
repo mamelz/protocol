@@ -3,8 +3,8 @@ import itertools
 import numpy as np
 
 from . import errors
-from .graph_bases.run import RunGraphNode, RunGraphRoot
-from .graph_bases.inter import InterGraphNode
+from .graph_classes.run import RunGraphNode, RunGraphRoot
+from .graph_classes.inter import InterGraphNode
 from ..graph.base import GraphNodeMeta
 from ..graph.errors import NodeConfigurationError
 from ..graph.spec import NodeConfigurationProcessor

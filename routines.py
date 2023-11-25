@@ -214,12 +214,6 @@ class RegularRoutine(Routine):
     def set_live_tracking(self, true_false: bool):
         self._live_tracking = true_false
 
-#    def disable_live_tracking(self):
-#        self.set_live_tracking(False)
-
-#    def enable_live_tracking(self):
-#        self.set_live_tracking(True)
-
 
 class EvolutionRegularRoutine(RegularRoutine):
     type = "evolution"

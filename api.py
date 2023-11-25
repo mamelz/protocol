@@ -10,8 +10,8 @@ import yaml
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .builder.graph_bases.user import UserGraphRoot
-from .builder.graph_bases.run import RunGraphRoot
+from .builder.graph_classes.user import UserGraphRoot
+from .builder.graph_classes.run import RunGraphRoot
 from .builder.main import GraphBuilder
 from .routines import (
     Routine,
