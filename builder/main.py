@@ -9,9 +9,9 @@ import numpy as np
 from . import errors
 from .stagecompiler import StageCompiler
 from .taskresolver import TaskResolver
-from .graph_bases.user import UserGraphRoot, UserGraphNode
-from .graph_bases.inter import InterGraphRoot, InterGraphNode
-from .graph_bases.run import RunGraphRoot
+from .graph_classes.user import UserGraphRoot, UserGraphNode
+from .graph_classes.inter import InterGraphRoot, InterGraphNode
+from .graph_classes.run import RunGraphRoot
 from ..graph.base import GraphRoot
 from ..graph.spec import NodeConfigurationProcessor, GraphSpecification
 

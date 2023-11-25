@@ -2,125 +2,21 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    pass
+    from .builder.graph_classes.run import RunGraphRoot
+    from .routines.classes import Routine
 
-import sys
 import textwrap
 import yaml
-from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from .builder.graph_bases.user import UserGraphRoot
-from .builder.graph_bases.run import RunGraphRoot
+from .builder.graph_classes.user import UserGraphRoot
 from .builder.main import GraphBuilder
-from .routines import (
-    Routine,
-    EvolutionRegularRoutine,
-    MonitoringRoutine,
-    PropagationRoutine,
-    RegularRoutine
-    )
+from .essentials import Performable, Propagator, System
+from .routines.classes import PropagationRoutine
+from .routines.generator import RoutineGenerator
 
 
-class _Performable(ABC):
-    """Interface representing an object that can be performed."""
-
-    @abstractmethod
-    def __init__(self):
-        self._output_str_prefix = None
-
-    @abstractmethod
-    def perform(self):
-        pass
-
-    @abstractmethod
-    def build(self):
-        pass
-
-    def _print_with_prefix(self, out_str):
-        if self._output_str_prefix is not None:
-            out = " | ".join([self._output_str_prefix, out_str])
-        else:
-            out = out_str
-
-        print(out)
-        sys.stdout.flush()
-
-
-class _Propagator(ABC):
-    """Interface representing a propagator.
-
-    A callable that takes 3 arguments:
-    state, time (float), timestep (float).
-    It returns the state after time evolution of one timestep.
-    """
-
-    @classmethod
-    def __subclasshook__(cls, __subclass: type) -> bool:
-        return hasattr(__subclass, "__call__")
-
-    @abstractmethod
-    def __call__(self, state: Any, time: float, timestep: float) -> Any:
-        """Propagate state from (time) to (time + timestep) and return state.
-        """
-        raise NotImplementedError
-
-
-class _System:
-    """Class representing the time-dependent quantum system.
-
-    Each schedule is associated with exactly one time-dependent system. The
-    `System` object encapsulates all the information about the time evolution
-    of the system, i.e. at any system time, the quantum state and the
-    hamiltonian are known. It also provides the methods necessary to propagate
-    the system in time.
-    """
-
-    def __init__(self, start_time: float,
-                 initial_state,
-                 sys_vars: dict = {},
-                 propagator: _Propagator = None):
-        """Construct new physical system.
-
-        The system is constructed from initial time, initial state and system
-        parameters.
-        Optionally, an instance of the `Propagator` interface can be passed.
-
-        Args:
-            start_time (float): The start time of the system.
-            initial_state (Any): The initial state.
-            sys_vars (dict): Dictionary containing system variables entering as
-                positional arguments for routines.
-            propagator (Propagator, optional): An instance of the Propagator
-                interface. Defaults to None.
-
-        Raises:
-            TypeError: Raised, when the propagator does not implement the
-                interface.
-        """
-        if propagator is not None:
-            if not isinstance(propagator, _Propagator):
-                raise TypeError("Propagator does not implement interface.")
-            self._propagator = propagator
-
-        self._time = start_time
-        self.psi = initial_state
-        self.sys_vars = sys_vars
-
-    @property
-    def time(self):
-        return self._time
-
-    def propagate(self, timestep):
-        """Propagate the system by timestep."""
-        if not hasattr(self, "_propagator"):
-            raise RuntimeError("No propagator was set.")
-        self.psi = self._propagator(self.psi, self._time, timestep)
-        self._time += timestep
-        return
-
-
-class Protocol(_Performable):
+class Protocol(Performable):
     """A collection of schedules.
     """
     def __init__(self, schedules: Sequence[Schedule], label: str = None):
@@ -219,7 +115,7 @@ class Protocol(_Performable):
             sch.build(start_time)
 
 
-class Schedule(_Performable):
+class Schedule(Performable):
     """Class representing a schedule."""
 
     @classmethod
@@ -274,9 +170,6 @@ class Schedule(_Performable):
         if "start_time" not in self._user_graph.options.local:
             self.start_time = 0.0
 
-    def __repr__(self) -> str:
-        return self._map.values().__str__()
-
     @property
     def num_routines(self):
         return self._run_graph.num_routines
@@ -295,36 +188,6 @@ class Schedule(_Performable):
         self._user_graph.start_time = new
         if self._system_initialized:
             self._reinitialize_system()
-
-    def _make_routines(self):
-        if not self._system_initialized:
-            raise ValueError("System must be initialized, first."
-                             " Call .initialize_system().")
-        system = self._system
-        routines = [None]*self._run_graph.num_routines
-        for i, routnode in enumerate(self._run_graph.routines):
-            stage_idx = routnode.parent.ID.local + 1
-            if routnode.type == "propagation":
-                routine = PropagationRoutine(routnode.options.local)
-                routine.stage_idx = stage_idx
-                routines[i] = routine
-            elif routnode.type == "evolution":
-                routine = EvolutionRegularRoutine(routnode.options.local,
-                                                  system)
-                routine.stage_idx = stage_idx
-                routines[i] = routine
-            elif routnode.type == "monitoring":
-                routine = MonitoringRoutine(routnode.options.local,
-                                            system)
-                routine.stage_idx = stage_idx
-                routines[i] = routine
-            elif routnode.type == "regular":
-                routine = RegularRoutine(routnode.options.local,
-                                         system)
-                routine.stage_idx = stage_idx
-                routines[i] = routine
-
-        self._routines = tuple(routines)
 
     def _reinitialize_system(self):
         init_state = self._system.psi
@@ -367,7 +230,7 @@ class Schedule(_Performable):
         self._set_live_tracking(routines, True)
 
     def initialize_system(self, initial_state, sys_vars: dict = {},
-                          propagator: _Propagator = None):
+                          propagator: Propagator = None):
         """Initialize the physical system of the schedule.
 
         Optionally, also sets a propagator for the system. Without propagator,
@@ -380,15 +243,15 @@ class Schedule(_Performable):
             propagator (Propagator): An instance of the Propagator interface.
         """
 
-        self._system = _System(self.start_time, initial_state,
-                               sys_vars, propagator)
+        self._system = System(self.start_time, initial_state,
+                              sys_vars, propagator)
         self._system_initialized = True
 
     def perform(self):
         """Execute all routines and collect results."""
         if not self._ready_for_execution:
             raise ValueError("Schedule is not set up for execution. "
-                             "Call .setup().")
+                             "Call .build().")
 
         for i, routine in enumerate(self._routines):
             stage_idx = routine.stage_idx
@@ -444,7 +307,8 @@ class Schedule(_Performable):
 
         builder = GraphBuilder()
         self._run_graph = builder.build(self._user_graph)
-        self._make_routines()
+        rout_gen = RoutineGenerator()
+        self._routines = rout_gen.make(self._system, self._run_graph)
         for rout in self._routines:
             if rout.store_token in self._live_tracking:
                 rout.set_live_tracking(self._live_tracking[rout.store_token])

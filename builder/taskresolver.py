@@ -1,5 +1,5 @@
 from . import errors
-from .graph_bases.user import UserGraphNode
+from .graph_classes.user import UserGraphNode
 
 
 class TaskResolver:
