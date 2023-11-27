@@ -242,6 +242,7 @@ class NodeSpecification:
                  allowed_children: dict[str, tuple]):
         self._rank = rankname
         self._type = typename
+        self._dict = node_options
         self._mand = MandatoryOptions(node_options)
         self._mand_ex = MandatoryExclusiveOptions(node_options)
         self._opt = OptionalOptions(node_options)
@@ -252,12 +253,16 @@ class NodeSpecification:
         return f"NodeSpecification: Rank {self.rankname}, Type {self.typename}"
 
     @property
-    def options(self):
-        return NodeOptions(self._mand, self._mand_ex, self._opt, self._opt_ex)
-
-    @property
     def allowed_children(self) -> dict[str, tuple]:
         return self._allowed_children
+
+    @property
+    def dictionary(self):
+        return self._dict
+
+    @property
+    def options(self):
+        return NodeOptions(self._mand, self._mand_ex, self._opt, self._opt_ex)
 
     @property
     def rankname(self):

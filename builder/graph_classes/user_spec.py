@@ -86,7 +86,7 @@ USER_GRAPH_CONFIG_DICT = {
             },
             "predefined": {
                 "mandatory": {
-                    "task_name": {
+                    "name": {
                         "types": (str,)
                     }
                 },
@@ -247,11 +247,11 @@ USER_GRAPH_CONFIG_DICT = {
         },
         "Stage": {
             "regular": {
-                "Task": ("default",),
+                "Task": ("default", "predefined"),
                 "Routine": ("regular")
             },
             "evolution": {
-                "Task": ("default",),
+                "Task": ("default", "predefined"),
                 "Routine": ("evolution", "monitoring", "propagation")
             }
         },
