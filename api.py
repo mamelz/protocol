@@ -3,17 +3,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .builder.graph_classes.run import RunGraphRoot
-    from .routines.classes import Routine
+    from .routine.classes import Routine
 
 import textwrap
-import yaml
 from typing import Any, Sequence
 
 from .builder.graph_classes.user import UserGraphRoot
 from .builder.main import GraphBuilder
+from .inputparser.main import YAMLParser
 from .essentials import Performable, Propagator, System
-from .routines.classes import PropagationRoutine
-from .routines.generator import RoutineGenerator
+from .routine.classes import PropagationRoutine
+from .routine.generator import RoutineGenerator
 
 
 class Protocol(Performable):
@@ -47,7 +47,7 @@ class Protocol(Performable):
         self.results = {}
 
     @property
-    def _map(self):
+    def _map(self) -> dict[str, Schedule]:
         labels = (sch.label for sch in self._schedules)
         return dict(zip(labels, self._schedules))
 
@@ -79,7 +79,7 @@ class Protocol(Performable):
             target_label (str): Label of the newly created schedule.
         """
         source_sched = self._map[source_label]
-        new_sched = Schedule(source_sched._configuration, target_label)
+        new_sched: Schedule = source_sched.duplicate(target_label)
         new_sched.initialize_system(source_sched._system.psi,
                                     source_sched._system.sys_vars,
                                     source_sched._system._propagator)
@@ -132,13 +132,7 @@ class Schedule(Performable):
         Returns:
             Schedule | tuple[Schedule]: Schedule or tuple of schedule objects.
         """
-        with open(yaml_path, "r") as stream:
-            config = yaml.safe_load(stream)
-
-        try:
-            sched_cfg = config["schedules"]
-        except KeyError:
-            sched_cfg = config
+        sched_cfg, tasks = YAMLParser().parse_from_file(yaml_path)
 
         if len(sched_cfg) > 1:
             if label is not None:
@@ -146,13 +140,15 @@ class Schedule(Performable):
                                  " must be None")
             return (cls(cfg, label) for cfg in sched_cfg)
 
-        return cls(sched_cfg[0], label)
+        return cls(sched_cfg[0], label, tasks)
 
-    def __init__(self, configuration: dict, label: str = None):
+    def __init__(self, sched_cfg: dict, label: str = None,
+                 predef_tasks: dict = {}):
         """Construct schedule from configuration dictionary."""
         super().__init__()
-        self._configuration = configuration
-        self._user_graph = UserGraphRoot(configuration)
+        self._configuration = sched_cfg
+        self._user_graph = UserGraphRoot(sched_cfg)
+        self._predef_tasks = predef_tasks
         self._run_graph: RunGraphRoot = None
         if label is not None:
             self.label = label
@@ -160,7 +156,7 @@ class Schedule(Performable):
             try:
                 self.label = self._user_graph.options["label"]
             except KeyError:
-                self.label = "no_label"
+                self.label = "no label"
 
         self._live_tracking: dict[str, Routine] = {}
         self._ready_for_execution = False
@@ -217,6 +213,10 @@ class Schedule(Performable):
             routines = (routines,)
 
         self._set_live_tracking(routines, False)
+
+    def duplicate(self, label: str) -> Schedule:
+        """Return a copy of self with different label."""
+        return type(self)(self._configuration, label, self._predef_tasks)
 
     def enable_live_tracking(self, routines: Sequence[str] | str):
         """Enable live tracking for the specified routines.
@@ -305,7 +305,7 @@ class Schedule(Performable):
         if start_time is not None:
             self.start_time = start_time
 
-        builder = GraphBuilder()
+        builder = GraphBuilder(self._predef_tasks)
         self._run_graph = builder.build(self._user_graph)
         rout_gen = RoutineGenerator()
         self._routines = rout_gen.make(self._system, self._run_graph)

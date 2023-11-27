@@ -16,6 +16,26 @@ class TaskResolver:
                     "task_name: task_options pairs."
                 )
 
+    def inline(self, task_node: UserGraphNode, graph=False):
+        if graph:
+            for ch in task_node:
+                self.inline(ch)
+            return
+
+        if task_node.rank_name() != "Task":
+            return
+
+        if task_node.type != "predefined":
+            return
+
+        inlined_opts = self._predef_tasks[task_node.options["name"]]
+        inlined_task = UserGraphNode(
+            task_node.parent,
+            inlined_opts,
+            rank=2)
+        task_node.parent.replace_child(
+            task_node.ID.local, (inlined_task,))
+
     def resolve(self, task_node: UserGraphNode, graph=False):
         if graph:
             for ch in task_node:
@@ -27,8 +47,6 @@ class TaskResolver:
 
         if task_node.type == "default":
             self._resolve_default(task_node)
-        elif task_node.type == "predefined":
-            self._resolve_predefined(task_node)
         else:
             raise errors.TaskResolverError(
                 f"Unknown task type {task_node.type}")
@@ -45,15 +63,3 @@ class TaskResolver:
         parent.replace_child(
             task_node.ID.local,
             routine_nodes)
-
-    def _resolve_predefined(self, task_node: UserGraphNode):
-        if task_node.type != "predefined":
-            raise errors.TaskResolverError(
-                f"Wrong type for task {task_node}")
-
-        inlined_task = UserGraphNode(
-            task_node.parent,
-            self._predef_tasks[task_node.options["task_name"]],
-            rank=2)
-        task_node.parent.replace_child(
-            task_node.ID.local, (inlined_task,))

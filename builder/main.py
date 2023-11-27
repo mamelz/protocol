@@ -68,9 +68,9 @@ class GraphBuilder(GraphProcessor):
     def compile(self, inter_graph: InterGraphRoot) -> RunGraphRoot:
         """Compile an inter graph to a run graph.
 
-        During compilation, all implicit routines like propagation routines
-        are constructed. Returns the compiled graph, an instance of
-        RunGraphRoot.
+        During compilation, all implicit routines like propagation and
+        monitoring routines are constructed. Returns the compiled graph,
+        an instance of RunGraphRoot.
         """
         rungraph = RunGraphRoot({})
         stagecompiler = self.compiler
@@ -112,6 +112,8 @@ class Preprocessor(GraphProcessor):
     def process(self, user_graph: UserGraphRoot) -> InterGraphRoot:
         """Preprocess the user graph.
         """
+        self._userprocessor.set_type(user_graph, graph=True)
+        self._taskresolver.inline(user_graph, graph=True)
         self._userprocessor.set_type(user_graph, graph=True)
         self._taskresolver.resolve(user_graph, graph=True)
         self._userprocessor.set_options(user_graph, graph=True)
