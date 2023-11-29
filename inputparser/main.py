@@ -9,7 +9,7 @@ import yaml
 
 from ..builder.graph_classes.user import UserGraphRoot
 from ..graph.spec import GraphSpecification
-from .graph_classes.parser_spec import INPUT_CONFIG_DICT as _inputcfg
+from .graph_classes.yaml_spec import INPUT_CONFIG_DICT as _inputcfg
 from .graph_classes.yaml import YAMLGraphRoot
 
 
@@ -43,10 +43,10 @@ class YAMLParser(FileParser):
                                            dict[str, dict]]:
         yaml_graph = YAMLGraphRoot(config)
         self.parsing_spec.processor.process(yaml_graph, graph=True)
-        schedules = yaml_graph.schedules_conf
-        tasks = yaml_graph.tasks_conf
+        schedules = tuple(sch.options.local for sch in yaml_graph.schedules)
+        tasks_dict = {task.options["name"]: task for task in yaml_graph.tasks}
 
-        return schedules, tasks
+        return schedules, tasks_dict
 
     def parse_from_file(self, path: str) -> tuple[dict,
                                                   dict[str, dict]]:

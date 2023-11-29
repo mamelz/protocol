@@ -6,8 +6,15 @@ from ...graph.spec import GraphSpecification
 class UserGraphNode(GraphNode, metaclass=GraphNodeMeta,
                     graph_spec=GraphSpecification(USER_GRAPH_CONFIG_DICT)):
 
-    def _init_children(self):
-        return super()._init_children()
+    def _post_init(self):
+        if not self.isleaf:
+            child_rankname = f"{self.rank_name(self.rank + 1).lower()}s"
+            try:
+                ch_opts = self.options.local[child_rankname]
+                ch_gen = (self.make_child(opt) for opt in ch_opts)
+                self.set_children(ch_gen, quiet=True)
+            except KeyError:
+                pass
 
 
 class UserGraphRoot(GraphRoot, UserGraphNode, metaclass=GraphRootMeta):

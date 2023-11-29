@@ -25,6 +25,9 @@ INTER_GRAPH_CONFIG_DICT = {
                     "propagation_time": {
                         "types": (float,)
                     },
+                    "start_time": {
+                        "types": (float,)
+                    },
                     "monitoring": {
                         "types": (list,)
                     },
