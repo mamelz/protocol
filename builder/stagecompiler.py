@@ -6,7 +6,6 @@ from . import errors
 from .graph_classes.run import RunGraphNode, RunGraphRoot
 from .graph_classes.inter import InterGraphNode
 from ..graph.base import GraphNodeMeta
-from ..graph.errors import NodeConfigurationError
 from ..graph.spec import NodeConfigurationProcessor
 
 
@@ -48,18 +47,11 @@ class StageCompiler:
                          parent: RunGraphRoot) -> RunGraphNode:
         routine_opts = (rout.options.local for rout in interstage.children)
         stage_opts = {
-            "routines": [
-                {k: rout_opdict[k] for k in self._out_rout_keys["regular"]}
-                for rout_opdict in routine_opts
-                ],
             "type": "regular"
             }
         out_stage = RunGraphNode(parent, stage_opts, rank=1)
+        out_stage.set_children_from_options(routine_opts, quiet=True)
         parent.add_children((out_stage,))
-        try:
-            self._out_config_proc.verify(out_stage)
-        except NodeConfigurationError:
-            raise errors.StageCompilerError("Something went wrong.")
 
         return out_stage
 

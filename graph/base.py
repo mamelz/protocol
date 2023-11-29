@@ -411,7 +411,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         else:
             self._set_children_tuple(new)
 
-    def set_children_from_options(self, options: Sequence[dict]):
+    def set_children_from_options(self, options: Sequence[dict], quiet=False):
         """Replace all children from sequence of options.
 
         This deletes all children of the node and constructs new one from the
@@ -419,8 +419,11 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         Args:
             options (Sequence[dict]): The options of the new children.
         """
-        self.children = tuple(self._CHILD_TYPE(self, opts)
-                              for opts in options)
+        ch_tup = tuple(self._CHILD_TYPE(self, opts) for opts in options)
+        if not quiet:
+            self.children = ch_tup
+        else:
+            self._set_children_tuple(ch_tup)
 
 
 class GraphRootABCMeta(GraphNodeMeta, ABCMeta):

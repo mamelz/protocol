@@ -134,7 +134,7 @@ class Preprocessor(GraphProcessor):
                             interstage: InterGraphNode):
         assert interstage.num_children == 0
 
-        if userstage.type == "default":
+        if userstage.type == "regular":
             def routines_gen():
                 for uroutine in userstage.children:
                     assert uroutine.rank_name() == "Routine"

@@ -259,7 +259,7 @@ USER_GRAPH_CONFIG_DICT = {
             "default": {
                 "Stage": ("regular", "evolution"),
                 "Task": ("default",),
-                "Routine": ("regular",)
+                # "Routine": ("regular",)
             }
         },
         "Stage": {

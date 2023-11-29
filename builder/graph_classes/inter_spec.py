@@ -47,7 +47,7 @@ INTER_GRAPH_CONFIG_DICT = {
                         "types": (str,),
                     },
                     "args": {
-                        "types": (list,)
+                        "types": (tuple,)
                     },
                     "description": {
                         "types": (str,)

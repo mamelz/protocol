@@ -351,6 +351,16 @@ class NodeConfigurationProcessor:
             except NodeConfigurationError:
                 impossible_typenames |= {typename}
 
+        incomplete_typenames = set()
+        for typename, nodetype in types_dict.items():
+            missing = (set(nodetype.options.mandatory.missing_keys(
+                node.options.local))
+                | set(nodetype.options.mandatory_exclusive.missing_keys(
+                    node.options.local))
+                )
+            if len(missing) > 0:
+                incomplete_typenames |= {typename}
+
         possible_typenames = set(types_dict.keys() - impossible_typenames)
         if len(possible_typenames) == 0:
             raise NodeConfigurationError(
@@ -368,6 +378,11 @@ class NodeConfigurationProcessor:
         if len(possible_typenames) == 0:
             raise NodeConfigurationError(
                 f"Node {node} has invalid options.")
+
+        # if type is still ambiguous, filter out types that would
+        # miss mandatory options
+        if len(possible_typenames) > 1:
+            possible_typenames -= incomplete_typenames
 
         if len(possible_typenames) == 1:
             typename = next(iter(possible_typenames))
