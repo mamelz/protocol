@@ -37,7 +37,7 @@ class TaskResolver:
         taskname = task_node.options["name"]
         predef_task: YAMLTaskNode = self._predef_tasks[taskname]
 
-        rout_opts = [r.options.local for r in predef_task.routines]
+        rout_opts = [r.options.local.copy() for r in predef_task.routines]
         for opt in rout_opts:
             try:
                 time = task_node.options["stagetime"]
@@ -50,7 +50,7 @@ class TaskResolver:
             del opt["tasktime"]
             del opt["type"]
 
-        inlined_opts = predef_task.options.local
+        inlined_opts = predef_task.options.local.copy()
         del inlined_opts["name"]
         inlined_opts["routines"] = rout_opts
         inlined_task = UserGraphNode(

@@ -55,7 +55,11 @@ INPUT_CONFIG_DICT = {
                         "default": 0.0
                     },
                     **_usr_graph_cfg.ranks["Routine"].types[
-                        "evolution"].options.optional
+                        "evolution"].options.optional,
+                    "tag": {
+                        "types": (str,),
+                        "default": "TASK"
+                    }
                 }
             }
         }
