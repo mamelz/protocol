@@ -54,21 +54,28 @@ class GraphNodeABCMeta(ABCMeta):
 
 class GraphNodeMeta(GraphNodeABCMeta):
     """Meta class for creation of node classes."""
-    def __new__(mcls, name, bases, attrs, *, graph_spec: GraphSpecification
+    def __new__(mcls, name, bases, attrs, *,
+                graph_spec: GraphSpecification = None
                 ) -> GraphNode:
         if len(bases) == 0:
             raise ValueError("Must be subclass of at least one"
                              " GraphNode class.")
         for base in bases:
             if not issubclass(base, GraphNode):
-                raise TypeError("Must only subclass GraphNode class.")
+                raise TypeError("Must only subclass GraphNode classes.")
 
         return super().__new__(mcls, name, bases, attrs)
 
-    def __init__(cls, name, bases, attrs, graph_spec: GraphSpecification):
+    def __init__(cls, name, bases, attrs,
+                 graph_spec: GraphSpecification = None):
         super().__init__(name, bases, attrs)
-        cls._GRAPH_SPEC = graph_spec
-        cls._CHILD_TYPE = cls
+        if graph_spec is not None:
+            cls._GRAPH_SPEC = graph_spec
+        else:
+            cls._GRAPH_SPEC = bases[0]._GRAPH_SPEC
+
+        if not hasattr(cls, "_CHILD_TYPE"):
+            cls._CHILD_TYPE = cls
 
 
 class GraphNode(metaclass=GraphNodeABCMeta):
@@ -89,27 +96,20 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         self._parent = parent
         self._children = NodeChildren(())
         self.__options = options
-        self._init_children()
+        self._post_init()
 
     def __iter__(self):
         """Iterator cycling through all nodes of local graph."""
         return iter(self.map.values())
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return (
-            f"{type(self).__name__}: {self.rank_name(self.rank).capitalize()}:"
+            f"{type(self).__name__}: {self.rank_name().capitalize()}:"
             f" {self.ID}")
 
     @abstractmethod
-    def _init_children(self):
-        if not self.isleaf:
-            child_rankname = f"{self.rank_name(self.rank + 1).lower()}s"
-            try:
-                ch_opts = self.options.local[child_rankname]
-                ch_gen = (self.make_child(opt) for opt in ch_opts)
-                self.set_children(ch_gen, quiet=True)
-            except KeyError:
-                pass
+    def _post_init(self):
+        raise NotImplementedError
 
     def make_child(self, opts: dict) -> GraphNodeMeta:
         return self._CHILD_TYPE(self, opts)
@@ -141,13 +141,13 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         return self._children.tuple
 
     @children.setter
-    def children(self, new: Sequence[GraphNode]):
+    def children(self, new: Iterable[GraphNode]):
         self._set_children_tuple(new)
         self.root.register_children_mutation(self)
 
     @children.deleter
     def children(self):
-        self._children.tuple = ()
+        self._set_children_tuple(())
 
     @property
     def _it(self):
@@ -232,7 +232,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     @property
     def options(self):
-        if not hasattr(self, "_options"):
+        if not hasattr(self, "_node_options"):
             self._node_options = GraphNodeOptions(self, self.__options)
 
         return self._node_options
@@ -370,6 +370,9 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         The name of a specified rank. If rank is None, returns rank name
         of node.
         """
+        if hasattr(self, "_rankname"):
+            return self._rankname
+
         rank_dict = {v: k for k, v in self._GRAPH_SPEC.hierarchy.items()}
         if rank is None:
             return rank_dict[self.rank]

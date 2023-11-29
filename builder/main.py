@@ -134,22 +134,45 @@ class Preprocessor(GraphProcessor):
                             interstage: InterGraphNode):
         assert interstage.num_children == 0
 
-        def routines_gen():
-            for uroutine in userstage.children:
-                assert uroutine.rank_name() == "Routine"
-                ispec = self.interspec.ranks["Routine"].types[uroutine.type]
-                opts = {
-                    k: uroutine.options[k] for k in ispec.options.keys()
-                }
+        if userstage.type == "default":
+            def routines_gen():
+                for uroutine in userstage.children:
+                    assert uroutine.rank_name() == "Routine"
+                    ispec = self.interspec.ranks[
+                        "Routine"].types[uroutine.type]
+                    opts = {
+                        k: uroutine.options[k] for k in ispec.options.keys()
+                    }
 
                 yield InterGraphNode(interstage, opts)
+
+            interstage.children = iter(routines_gen())
+            return
+
+        stage_start = interstage.options["start_time"]
+        irout_opts = (ch.options.local for ch in userstage.children)
+        for opt in irout_opts:
+            try:
+                opt["time"] = opt["systemtime"]
+                del opt["systemtime"]
+            except KeyError:
+                opt["time"] = opt["stagetime"] + stage_start
+                del opt["stagetime"]
+
+        def routines_gen():
+            for opt in irout_opts:
+                yield InterGraphNode(interstage, opt)
 
         interstage.children = iter(routines_gen())
 
     def _translate(self, usergraph: UserGraphRoot,
                    intergraph: InterGraphRoot):
+        time = usergraph.options["start_time"]
         for stage in usergraph.children:
             interopts = self._get_inter_opts_stage(stage)
+            if stage.type == "evolution":
+                interopts["start_time"] = time
+                time += stage.options["propagation_time"]
             intergraph.add_children_from_options(interopts)
 
         for ustage, istage in zip(usergraph.stages, intergraph.stages):

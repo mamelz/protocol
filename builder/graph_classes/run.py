@@ -16,7 +16,7 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
     def routines(self) -> tuple[RunGraphNode]:
         return self.leafs
 
-    def _init_children(self):
+    def _post_init(self):
         pass
 
 

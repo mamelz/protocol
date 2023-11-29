@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .builder.graph_classes.run import RunGraphRoot
     from .routine.classes import Routine
+    from .inputparser.graph_classes.yaml import YAMLTaskNode
 
+import copy
 import textwrap
 from typing import Any, Sequence
 
@@ -133,7 +135,6 @@ class Schedule(Performable):
             Schedule | tuple[Schedule]: Schedule or tuple of schedule objects.
         """
         sched_cfg, tasks = YAMLParser().parse_from_file(yaml_path)
-
         if len(sched_cfg) > 1:
             if label is not None:
                 raise ValueError("When mutiple schedules are defined, label"
@@ -148,7 +149,7 @@ class Schedule(Performable):
         super().__init__()
         self._configuration = sched_cfg
         self._user_graph = UserGraphRoot(sched_cfg)
-        self._predef_tasks = predef_tasks
+        self._predef_tasks: dict[str, YAMLTaskNode] = predef_tasks
         self._run_graph: RunGraphRoot = None
         if label is not None:
             self.label = label
@@ -216,7 +217,10 @@ class Schedule(Performable):
 
     def duplicate(self, label: str) -> Schedule:
         """Return a copy of self with different label."""
-        return type(self)(self._configuration, label, self._predef_tasks)
+        copy_sched = copy.deepcopy(self)
+        copy_sched.label = label
+
+        return copy_sched
 
     def enable_live_tracking(self, routines: Sequence[str] | str):
         """Enable live tracking for the specified routines.

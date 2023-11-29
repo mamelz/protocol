@@ -1,5 +1,9 @@
 from . import errors
 from .graph_classes.user import UserGraphNode
+from .. inputparser.graph_classes.yaml import YAMLTaskNode
+
+
+_usrcfg = UserGraphNode.graph_spec
 
 
 class TaskResolver:
@@ -10,11 +14,8 @@ class TaskResolver:
     def __init__(self, predefined_tasks: dict[str, dict]):
         self._predef_tasks = predefined_tasks
         for task_opts in self._predef_tasks.values():
-            if not isinstance(task_opts, dict):
-                raise errors.TaskResolverError(
-                    "Predefined tasks must be dict[str, dict] with "
-                    "task_name: task_options pairs."
-                )
+            if not isinstance(task_opts, YAMLTaskNode):
+                raise TypeError
 
     def inline(self, task_node: UserGraphNode, graph=False):
         if graph:
@@ -25,14 +26,49 @@ class TaskResolver:
         if task_node.rank_name() != "Task":
             return
 
-        if task_node.type != "predefined":
+        if task_node.type == "predefined-evolution":
+            self._inline_evolution(task_node)
+        elif task_node.type == "predefined-regular":
+            self._inline_regular(task_node)
+        else:
             return
 
-        inlined_opts = self._predef_tasks[task_node.options["name"]]
+    def _inline_evolution(self, task_node: UserGraphNode):
+        taskname = task_node.options["name"]
+        predef_task: YAMLTaskNode = self._predef_tasks[taskname]
+
+        rout_opts = [r.options.local for r in predef_task.routines]
+        for opt in rout_opts:
+            try:
+                time = task_node.options["stagetime"]
+                time_key = "stagetime"
+            except KeyError:
+                time = task_node.options["systemtime"]
+                time_key = "systemtime"
+
+            opt[time_key] = time
+            del opt["tasktime"]
+            del opt["type"]
+
+        inlined_opts = predef_task.options.local
+        del inlined_opts["name"]
+        inlined_opts["routines"] = rout_opts
         inlined_task = UserGraphNode(
             task_node.parent,
             inlined_opts,
             rank=2)
+        _usrcfg.processor.process(inlined_task)
+        task_node.parent.replace_child(
+            task_node.ID.local, (inlined_task,))
+
+    def _inline_regular(self, task_node: UserGraphNode):
+        taskname = task_node.options["name"]
+        predef_task: YAMLTaskNode = self._predef_tasks[taskname]
+        inlined_task = UserGraphNode(
+            task_node.parent,
+            predef_task.options.local,
+            rank=2)
+        _usrcfg.processor.process(inlined_task)
         task_node.parent.replace_child(
             task_node.ID.local, (inlined_task,))
 
@@ -49,7 +85,7 @@ class TaskResolver:
             self._resolve_default(task_node)
         else:
             raise errors.TaskResolverError(
-                f"Unknown task type {task_node.type}")
+                f"Cannot resolve task type {task_node.type}")
 
     def _resolve_default(self, task_node: UserGraphNode):
         if task_node.type != "default":

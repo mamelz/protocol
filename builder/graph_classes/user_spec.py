@@ -72,24 +72,45 @@ USER_GRAPH_CONFIG_DICT = {
         },
         "Task": {
             "default": {
-                "mandatory": {},
+                "mandatory": {
+                    "routines": {
+                        "types": (list,),
+                    }
+                },
                 "optional": {
                     "global_options": {
                         "types": (dict,),
                         "default": {}
                     },
-                    "routines": {
-                        "types": (list,),
-                        "default": []
-                    }
+#                    "routines": {
+#                        "types": (list,),
+#                        "default": []
+#                    }
                 }
             },
-            "predefined": {
+            "predefined-regular": {
                 "mandatory": {
                     "name": {
                         "types": (str,)
                     }
                 },
+            },
+            "predefined-evolution": {
+                "mandatory": {
+                    "name": {
+                        "types": (str,)
+                    }
+                },
+                "mandatory-exclusive": (
+                    {
+                        "stagetime": {
+                            "types": (float,)
+                        },
+                        "systemtime": {
+                            "types": (float,)
+                        }
+                    },
+                )
             }
         },
         "Routine": {
@@ -138,10 +159,10 @@ USER_GRAPH_CONFIG_DICT = {
                 },
                 "mandatory-exclusive": (
                     {
-                        "time": {
+                        "systemtime": {
                             "types": (float,)
                         },
-                        "localtime": {
+                        "stagetime": {
                             "types": (float,)
                         }
                     },
@@ -247,11 +268,11 @@ USER_GRAPH_CONFIG_DICT = {
         },
         "Stage": {
             "regular": {
-                "Task": ("default", "predefined"),
+                "Task": ("default", "predefined-regular"),
                 "Routine": ("regular")
             },
             "evolution": {
-                "Task": ("default", "predefined"),
+                "Task": ("default", "predefined-evolution"),
                 "Routine": ("evolution", "monitoring", "propagation")
             }
         },
@@ -262,7 +283,8 @@ USER_GRAPH_CONFIG_DICT = {
                 "Routine": ("evolution",
                             "regular")
             },
-            "predefined": ()
+            "predefined-regular": (),
+            "predefined-evolution": ()
         },
         "Routine": {
             "regular": (),

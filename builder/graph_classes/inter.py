@@ -6,7 +6,7 @@ from ...graph.spec import GraphSpecification
 class InterGraphNode(GraphNode, metaclass=GraphNodeMeta,
                      graph_spec=GraphSpecification(INTER_GRAPH_CONFIG_DICT)):
 
-    def _init_children(self):
+    def _post_init(self):
         pass
 
 
