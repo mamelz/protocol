@@ -8,6 +8,9 @@ from ...graph.spec import GraphSpecification
 class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
                    graph_spec=GraphSpecification(RUN_GRAPH_CONFIG_DICT)):
 
+    def _post_init(self):
+        pass
+
     @property
     def num_routines(self):
         return len(self.routines)
@@ -15,9 +18,6 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
     @property
     def routines(self) -> tuple[RunGraphNode]:
         return self.leafs
-
-    def _post_init(self):
-        pass
 
 
 class RunGraphRoot(GraphRoot, RunGraphNode, metaclass=GraphRootMeta):

@@ -176,15 +176,15 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                 node = node.parent
         return tuple(anc_gen())
 
-    @property
-    def external_options(self) -> dict:
-        """External routine options, not defined by yaml file."""
-        try:
-            return self.options.local["external"]
-        except KeyError:
-            if self.rank == 0:
-                raise KeyError("No external options set.")
-            return self.parent.external_options
+#    @property
+#    def external_options(self) -> dict:
+#        """External routine options, not defined by yaml file."""
+#        try:
+#            return self.options.local["external"]
+#        except KeyError:
+#            if self.rank == 0:
+#                raise KeyError("No external options set.")
+#            return self.parent.external_options
 
     @property
     def isleaf(self) -> bool:
@@ -269,10 +269,10 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         """Return map of self and all subordinate nodes."""
         return dict(zip(self._it_id, self._it))
 
-    def add_children(self, add: Sequence[GraphNode]):
-        self.children = (*self.children, *add)
+    def add_children(self, add: Iterable[GraphNode]):
+        self.children = chain(self.children, add)
 
-    def add_children_from_options(self, options: Sequence[dict] | dict = {}):
+    def add_children_from_options(self, options: Iterable[dict] | dict = {}):
         """Create new child nodes and append them to this node's children.
 
         Empty dicionaries as options generate empty child nodes.
@@ -281,14 +281,16 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             options (Sequence[dict] | dict): The options of the new child
                 nodes.
         """
-        if not isinstance(options, Sequence):
+        if not isinstance(options, Iterable):
             self.children = (
                 *self.children, self._CHILD_TYPE(self, options))
             return
         else:
-            self.children = (
-                *self.children,
-                *(self._CHILD_TYPE(self, opts) for opts in options))
+            self.children = chain(self.children,
+                                  (self.make_child(opt) for opt in options))
+#            self.children = (
+#                *self.children,
+#                *(self._CHILD_TYPE(self, opts) for opts in options))
             return
 
     def clear_children(self):

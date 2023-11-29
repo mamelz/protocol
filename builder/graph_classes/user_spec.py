@@ -82,10 +82,6 @@ USER_GRAPH_CONFIG_DICT = {
                         "types": (dict,),
                         "default": {}
                     },
-#                    "routines": {
-#                        "types": (list,),
-#                        "default": []
-#                    }
                 }
             },
             "predefined-regular": {
