@@ -20,6 +20,7 @@ from abc import (
     )
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from functools import cache
 from itertools import chain
 
 from .essentials import (
@@ -84,18 +85,22 @@ class GraphNode(metaclass=GraphNodeABCMeta):
     _GRAPH_SPEC: GraphSpecification
     _CHILD_TYPE: GraphNodeMeta
 
+    isroot = False
+
     @classmethod
     @property
     def graph_spec(cls):
         return cls._GRAPH_SPEC
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None):
+        self._spec = None
         if rank is None:
             rank = parent.rank + 1
         self._rank = rank
         self._parent = parent
         self._children = NodeChildren(())
-        self.__options = options
+        self._options = options
+        self._node_options = GraphNodeOptions(self, self._options)
         self._post_init()
 
     def __iter__(self):
@@ -130,15 +135,12 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         self._children.tuple = new
 
     @property
-    def spec(self) -> GraphSpecification:
-        if self.type is None:
-            return None
-
-        return self.graph_spec.ranks[self.rank_name()].types[self.type]
+    def spec(self) -> GraphSpecification | None:
+        return self._spec
 
     @property
-    def children(self) -> tuple[GraphNode]:
-        return self._children.tuple
+    def children(self) -> NodeChildren:
+        return self._children
 
     @children.setter
     def children(self, new: Iterable[GraphNode]):
@@ -176,16 +178,6 @@ class GraphNode(metaclass=GraphNodeABCMeta):
                 node = node.parent
         return tuple(anc_gen())
 
-#    @property
-#    def external_options(self) -> dict:
-#        """External routine options, not defined by yaml file."""
-#        try:
-#            return self.options.local["external"]
-#        except KeyError:
-#            if self.rank == 0:
-#                raise KeyError("No external options set.")
-#            return self.parent.external_options
-
     @property
     def isleaf(self) -> bool:
         """
@@ -193,24 +185,21 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         """
         return self.rank == self.leaf_rank
 
-    @property
-    def isroot(self) -> bool:
-        """True, if node is the root node of the graph, i.e. has rank 0."""
-        return self.rank == 0
+    @cache
+    def _get_children_index(self, children: NodeChildren):
+        return children.index(self)
 
     @property
     def ID(self) -> GraphNodeID:
-        parent = self.parent
-        if parent.ID.local is None:
-            return GraphNodeID((0,))
         return GraphNodeID(
-            (*parent.ID.tuple, parent.children.index(self)))
+            (*self.parent.ID.tuple, self._get_children_index(
+                self.parent.children)))
 
     @property
     def leafs(self) -> tuple[GraphNode]:
         """The lowest-rank child nodes that originate from this node."""
         if self.rank + 1 == self.leaf_rank:
-            return self.children
+            return self.children.tuple
 
         leafs_tuple = ()
         for child in self.children:
@@ -232,9 +221,6 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     @property
     def options(self):
-        if not hasattr(self, "_node_options"):
-            self._node_options = GraphNodeOptions(self, self.__options)
-
         return self._node_options
 
     @property
@@ -264,6 +250,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             raise ValueError(
                 f"Node type already set to {self.type}")
         self.options.local["type"] = new
+        self._spec = self.graph_spec.ranks[self.rank_name()].types[self.type]
 
     def _local_map(self) -> dict:
         """Return map of self and all subordinate nodes."""
@@ -288,9 +275,6 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         else:
             self.children = chain(self.children,
                                   (self.make_child(opt) for opt in options))
-#            self.children = (
-#                *self.children,
-#                *(self._CHILD_TYPE(self, opts) for opts in options))
             return
 
     def clear_children(self):
@@ -452,6 +436,10 @@ class GraphRoot(GraphNode, metaclass=GraphRootABCMeta):
     Contains the additional attribute ._map and provides functionality to
     ensure integrity of the graph options throughout execution.
     """
+
+    isroot = True
+    ID = GraphNodeID((0,))
+
     def __init__(self, options: dict):
         super().__init__(GraphNodeNONE(), options)
         self._mutated_nodes_ids = set()
@@ -480,6 +468,7 @@ class GraphRoot(GraphNode, metaclass=GraphRootABCMeta):
         if not hasattr(self, "_map"):
             self._make_map()
             return
+
         if self._mutated_nodes_ids == set():
             return
 

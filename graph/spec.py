@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from abc import ABC, abstractmethod
 from collections import UserDict
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from .errors import NodeConfigurationError
 
@@ -63,9 +64,7 @@ class ExclusiveOptionsABC(UserDict, ABC):
                     raise NodeConfigurationError(
                         f"Unknown keys {unknown_keys}.")
 
-        self.data = {}
-        for group in self.tuple:
-            self.data.update(group)
+        self.data = dict(*self.tuple)
 
     def __iter__(self):
         return iter(self.tuple)
@@ -311,11 +310,11 @@ class GraphSpecification:
 
 #       self._dict = graph_config
 
-    @property
+    @cached_property
     def hierarchy(self) -> dict[str, int]:
         return self._dict["hierarchy"]
 
-    @property
+    @cached_property
     def ranks(self) -> dict[str, RankSpecification]:
         ranks = {}
         for rname, rdict in self._dict["ranks"].items():
@@ -323,7 +322,7 @@ class GraphSpecification:
             ranks[rname] = RankSpecification(rname, rdict, rank_children)
         return ranks
 
-    @property
+    @cached_property
     def processor(self):
         return NodeConfigurationProcessor(self)
 

@@ -1,11 +1,9 @@
-import itertools
-
 import numpy as np
 
 from . import errors
 from .graph_classes.run import RunGraphNode, RunGraphRoot
 from .graph_classes.inter import InterGraphNode
-from ..graph.base import GraphNodeMeta
+from ..graph.base import GraphNodeMeta, GraphNodeID
 from ..graph.spec import NodeConfigurationProcessor
 
 
@@ -98,31 +96,39 @@ class StageCompiler:
                 k: opts[k] for k in self._out_rout_keys["evolution"]}
             outrout_opts.update({"type": "evolution"})
 
-            out_rout = self._out_type(out_stage, outrout_opts, rank=2)
+            out_rout_kwargs = {
+                "parent": out_stage,
+                "options": outrout_opts,
+                "rank": 2
+            }
+
             if time not in usr_timetable:
-                usr_timetable[time] = (out_rout,)
+                usr_timetable[time] = [out_rout_kwargs]
             else:
-                usr_timetable[time] += (out_rout,)
+                usr_timetable[time] += [out_rout_kwargs]
 
         usr_times = np.array(tuple(usr_timetable.keys()))
-
         mon_times = np.linspace(start_time,
                                 stop_time,
                                 numsteps,
                                 endpoint=True)
 
         mon_timetable: dict[float, tuple[InterGraphNode]] = {}
+        tdict = {
+            "tag": "MONITORING",
+            "type": "monitoring"
+        }
         for time in mon_times:
-            tdict = {
-                "tag": "MONITORING",
-                "time": time,
-                "type": "monitoring"
-                }
-            mon_routs = ()
+            tdict.update({"time": time})
+            mon_rout_kwargs = []
             for opt in monroutopts:
-                mon_routs += (
-                    self._out_type(out_stage, {**tdict, **opt}, rank=2),)
-            mon_timetable[time] = mon_routs
+                mon_rout_kwargs += [{
+                    "parent": out_stage,
+                    "options": {**tdict, **opt},
+                    "rank": 2
+                }]
+
+            mon_timetable[time] = mon_rout_kwargs
 
         rout_times = np.unique(np.concatenate([usr_times, mon_times]))
         proptimes = np.diff(rout_times)
@@ -133,40 +139,38 @@ class StageCompiler:
                 "time": time,
                 "step": step
             }
-            prop_timetable[time] = self._out_type(out_stage, opt, rank=2)
+            prop_timetable[time] = {
+                "parent": out_stage,
+                "options": opt,
+                "rank": 2,
+            }
 
-        complete_timetable: dict[float, dict] = {}
+        complete_timetable = []
         for time in rout_times:
             try:
-                complete_timetable[time] = mon_timetable[time]
-            except KeyError:
-                complete_timetable[time] = ()
-
-            try:
-                complete_timetable[time] += usr_timetable[time]
+                complete_timetable.extend(mon_timetable[time])
             except KeyError:
                 pass
 
             try:
-                complete_timetable[time] += (prop_timetable[time],)
+                complete_timetable.extend(usr_timetable[time])
             except KeyError:
                 pass
 
-#        save_last_opts = {
-#            "routine_name": "_return_state",
-#            "time": stop_time,
-#            "store_token": "State",
-#            "tag": "AUTOMATIC",
-#            "type": "evolution"
-#        }
+            try:
+                complete_timetable.append(prop_timetable[time])
+            except KeyError:
+                pass
 
+        stage_id_tup = out_stage.ID.tuple
 
-#        complete_timetable[rout_times[-1]] +=
+        def stage_routines_gen():
+            for i, kwargs in enumerate(complete_timetable):
+                rout_id = GraphNodeID((*stage_id_tup, i))
+                yield self._out_type(**kwargs, ID=rout_id)
 
-        complete_routines = itertools.chain.from_iterable(
-            complete_timetable.values())
-        out_stage.children = tuple(complete_routines)
-        out_stage.options.local.update(
+        out_stage.children = tuple((stage_routines_gen()))
+        out_stage.options.update(
             {"num_routines": out_stage.num_routines})
 
         return out_stage

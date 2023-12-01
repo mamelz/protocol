@@ -4,7 +4,7 @@ if TYPE_CHECKING:
     from .base import GraphNode
 
 from collections import UserDict
-from collections.abc import Iterable
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -37,11 +37,14 @@ class GraphNodeID:
 NoneID = GraphNodeID(())
 
 
-class NodeChildren(Iterable):
+class NodeChildren(Sequence):
 
     def __init__(self, children_iterable):
         self._tuple: tuple[GraphNode] = tuple(children_iterable)
         self._id_arr = self._calculate_id_arr()
+
+    def __getitem__(self, idx):
+        return self._tuple[idx]
 
     def __iter__(self):
         return iter(self._tuple)
@@ -85,14 +88,15 @@ class GraphNodeOptions(UserDict):
         try:
             return super().__getitem__(__key)
         except KeyError:
+            if self._node.isroot:
+                raise KeyError(f"Option {__key} not found.")
+
             rname = self._node.rank_name().lower()
-            for par in self._node.ancestors:
-                try:
-                    return par.options["global_options"][rname][
-                        __key]
-                except KeyError:
-                    continue
-            raise KeyError(f"Option {__key} not found.")
+            try:
+                return self._node.parent.options[
+                    "global_options"][rname][__key]
+            except KeyError:
+                raise KeyError(f"Option {__key} not found.")
 
     @property
     def local(self):
