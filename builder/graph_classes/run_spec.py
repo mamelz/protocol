@@ -93,7 +93,7 @@ RUN_GRAPH_CONFIG_DICT = {
                 },
                 "optional": {
                     "args": {
-                        "types": (tuple,),
+                        "types": (list,),
                         "default": ()
                     },
                     "description": {
