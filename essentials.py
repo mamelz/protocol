@@ -31,8 +31,10 @@ class Performable(ABC):
 class Propagator(ABC):
     """Interface representing a propagator.
 
-    A callable that takes 3 arguments:
-    state, time (float), timestep (float).
+    A callable with the signature:
+
+    [state (Any), time (float), timestep (float)] -> state (Any)
+
     It returns the state after time evolution of one timestep.
     """
 

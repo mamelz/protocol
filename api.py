@@ -21,13 +21,13 @@ from .routine.generator import RoutineGenerator
 class Protocol(Performable):
     """A collection of schedules.
     """
-    def __init__(self, schedules: Sequence[Schedule], label: str = None):
+    def __init__(self, schedules: Sequence[Schedule], label: str | int = None):
         """Construct protocol from the given schedules.
 
         Args:
             schedules (Sequence[Schedule]): The schedules to be contained in
                 the protocol.
-            label (str, optional): A label for the protocol. Defaults to
+            label (str | int, optional): A label for the protocol. Defaults to
                 'no label'.
 
         Raises:
@@ -60,7 +60,7 @@ class Protocol(Performable):
             return tuple([self._map[label] for label in schedule_labels])
 
     def add_schedule(self, schedule: Schedule):
-        """Add a schedule.
+        """Add a schedule to the protocol.
 
         Args:
             schedule (Schedule): The schedule to add.
@@ -74,7 +74,7 @@ class Protocol(Performable):
         self._schedules += (schedule,)
 
     def duplicate_schedule(self, source_label: str, target_label: str):
-        """Add copy of an already schedule.
+        """Add copy of an already contained schedule to the protocol.
 
         Args:
             source_label (str): Label of the schedule to copy.
@@ -87,13 +87,15 @@ class Protocol(Performable):
                                     source_sched._system._propagator)
         self.add_schedule(new_sched)
 
-    def perform(self, schedule_labels: Sequence[str] = None):
-        """Perform the specified schedules. By default performs all schedules.
+    def perform(self, schedule_labels: Sequence[str] | Sequence[int] = None):
+        """Perform the specified schedules.
+
+        By default performs all schedules.
 
         Args:
-            schedule_labels (Sequence[str], optional): Sequence of labels
-                of schedules to be performed. Defaults to None and performs all
-                schedules in that case.
+            schedule_labels (Sequence[str] | Sequence[int], optional):
+                Sequence of labels of schedules to be performed.
+                Defaults to None and performs all schedules in that case.
         """
         for sch in self._select_schedules(schedule_labels):
             self_label = f"'{self.label}'"
@@ -101,17 +103,18 @@ class Protocol(Performable):
             sch.perform()
             self.results[sch.label] = sch.results
 
-    def build(self, schedule_labels: Sequence[str] = None,
-              start_time=None):
+    def build(self, schedule_labels: Sequence[str] | Sequence[int] = None,
+              start_time: float = None):
         """Set up schedules for execution.
 
-        If label is given, sets up the specified schedule. Otherwise, sets up
-        all schedules.
+        If labels are given, sets up the specified schedules. Otherwise,
+        sets up all schedules.
+
         Args:
-            schedule_label (Sequence[str], optional): Label of a schedule.
-                Defaults to None.
+            schedule_labels (Sequence[str] | Sequence[int], optional):
+                Labels of schedules to be built.
             start_time (float, optional): A start time overriding the schedule
-                configuration. Defaults to None.
+                configurations.
         """
         for sch in self._select_schedules(schedule_labels):
             sch.build(start_time)
@@ -121,19 +124,23 @@ class Schedule(Performable):
     """Class representing a schedule."""
 
     @classmethod
-    def from_yaml(cls, yaml_path: str, label: str = None):
+    def from_yaml(cls, yaml_path: str, label: str | int = None
+                  ) -> Schedule | tuple[Schedule]:
         """Construct schedule from path to yaml configuration file.
 
-        If the file contains multiple schedule configurations, returns a list
+        If the file contains multiple schedule configurations, returns a tuple
         of all schedules.
 
         Args:
             yaml_path (str): Path to configuration file.
-            label (str, optional): Label for the schedule. Defaults to None.
+            label (str | int, optional): Label for the schedule.
+                Cannot be passed if multiple schedules are defined by the
+                configuration file.
 
         Returns:
-            Schedule | tuple[Schedule]: Schedule or tuple of schedule objects.
+            Schedule | tuple[Schedule]: Schedule(s) defined in the file.
         """
+
         sched_cfg, tasks = YAMLParser().parse_from_file(yaml_path)
         if len(sched_cfg) > 1:
             if label is not None:
@@ -143,7 +150,7 @@ class Schedule(Performable):
 
         return cls(sched_cfg[0], label, tasks)
 
-    def __init__(self, sched_cfg: dict, label: str = None,
+    def __init__(self, sched_cfg: dict, label: str | int = None,
                  predef_tasks: dict = {}):
         """Construct schedule from configuration dictionary."""
         super().__init__()
@@ -169,10 +176,12 @@ class Schedule(Performable):
 
     @property
     def num_routines(self):
+        """The number of routines in all stages."""
         return self._run_graph.num_routines
 
     @property
     def num_stages(self):
+        """The number of stages."""
         return self._run_graph.num_stages
 
     @property
@@ -215,8 +224,8 @@ class Schedule(Performable):
 
         self._set_live_tracking(routines, False)
 
-    def duplicate(self, label: str) -> Schedule:
-        """Return a copy of self with different label."""
+    def duplicate(self, label: str | int) -> Schedule:
+        """Return a copy of the schedule with given label."""
         copy_sched = copy.deepcopy(self)
         copy_sched.label = label
 
@@ -242,9 +251,11 @@ class Schedule(Performable):
 
         Args:
             initial_state (Any): The initial state.
-            sys_vars (dict): Dictionary containing additional positional
-                arguments for routines.
-            propagator (Propagator): An instance of the Propagator interface.
+            sys_vars (dict): Dictionary containing additional variables that
+                can be passed to routines as positional arguments.
+            propagator (Propagator): An object implementing the Propagator
+                interface, i.e. a callable with signature:
+                [state (Any), time (float), timestep (float)] -> state (Any).
         """
 
         self._system = System(self.start_time, initial_state,
@@ -252,7 +263,17 @@ class Schedule(Performable):
         self._system_initialized = True
 
     def perform(self):
-        """Execute all routines and collect results."""
+        """Run all stages and collect results.
+
+        During execution, various information will be printed to stdout.
+        Routines with live tracking enabled will print their return values at
+        each execution. All results are collected in the .results attribute of
+        the schedule and can be accessed by their store token or routine name
+        when no store token was defined.
+
+        Raises:
+            ValueError: Raised, if the schedule has not been built yet.
+        """
         if not self._ready_for_execution:
             raise ValueError("Schedule is not set up for execution. "
                              "Call .build().")
@@ -298,7 +319,7 @@ class Schedule(Performable):
 
         Args:
             start_time (float, optional): A start time to override the file
-                configuration. Defaults to None.
+                configuration.
 
         Raises:
             ValueError: Raised, if no system is initialized.
@@ -324,7 +345,7 @@ class Schedule(Performable):
 
         Here, general external information like system parameters can be made
         available to the routines. The user-defined functions need to take
-        these additional arguments at second position after the quantum state.
+        these additional arguments at second position after the system state.
 
         Args:
             positional_args (dict): Dictionary containing arbitrary variables
