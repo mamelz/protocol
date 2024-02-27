@@ -1,43 +1,27 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from ..graph.spec import NodeSpecification
 
 from abc import ABC, abstractmethod
 import os
 import yaml
 
-from ..builder.graph_classes.user import UserGraphRoot
 from ..graph.spec import GraphSpecification
-from .graph_classes.yaml_spec import INPUT_CONFIG_DICT as _inputcfg
+from .graph_classes.yaml_spec import INPUT_CONFIG_DICT as _yaml_inputcfg
 from .graph_classes.yaml import YAMLGraphRoot
 
 
-parsingspec = GraphSpecification(_inputcfg)
-
-
 class Parser(ABC):
-
-    parsing_spec: GraphSpecification = parsingspec
-    output_graph_type = UserGraphRoot
-
-
-class FileParser(Parser):
-
-    inputspec = Parser.parsing_spec.ranks["file"]
-
-    def __init__(self, input_type: str):
-        self._file_spec: NodeSpecification = self.inputspec.types[input_type]
 
     @abstractmethod
     def parse(self, config: dict) -> tuple:
         pass
 
 
-class YAMLParser(FileParser):
+class YAMLParser(Parser):
+
+    parsing_spec = GraphSpecification(_yaml_inputcfg)
 
     def __init__(self):
-        super().__init__("yaml")
+        pass
 
     def parse(self, config: dict) -> tuple[dict,
                                            dict[str, dict]]:
