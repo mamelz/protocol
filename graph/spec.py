@@ -337,7 +337,7 @@ class NodeConfigurationProcessor:
         self._spec = specification
 
     def get_specification(self, node: GraphNode
-                          ) -> NodeSpecification | tuple(NodeSpecification):
+                          ) -> NodeSpecification | tuple[NodeSpecification]:
         rankname = node.rank_name()
         if node.type is not None:
             return self._spec.ranks[rankname].types[node.type]
