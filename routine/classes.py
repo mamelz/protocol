@@ -47,7 +47,7 @@ class RoutineFunction:
                 == kind}
 
     @property
-    def args(self) -> NotImplemented:
+    def args(self):
         """Return the *args of the function."""
         raise NotImplementedError
 
