@@ -4,14 +4,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from inspect import _ParameterKind
     from typing import Callable
-    from ..api import _System
+    from ..essentials import System
 
 import importlib.util
 import os
 from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 
-from .errors import RoutineInitializationError
 from ..settings import SETTINGS
 
 
@@ -20,6 +19,15 @@ _functions_spec = importlib.util.spec_from_file_location(
    "functions", _functions_path)
 _FUNCTIONS_MODULE = importlib.util.module_from_spec(_functions_spec)
 _functions_spec.loader.exec_module(_FUNCTIONS_MODULE)
+
+
+class RoutineInitializationError(Exception):
+    message = "Error during initialization of routine."
+
+    def __init__(self, message=None):
+        if message is not None:
+            self.message = message
+        super().__init__()
 
 
 class RoutineFunction:
@@ -86,7 +94,7 @@ class Routine(ABC):
         self._options = options
 
     @abstractmethod
-    def __call__(self, system: _System):
+    def __call__(self, system: System):
         pass
 
     @property
@@ -105,7 +113,7 @@ class Routine(ABC):
 class RegularRoutine(Routine):
     type = "regular"
 
-    def __init__(self, options, system: _System):
+    def __init__(self, options, system: System):
         super().__init__(options)
         try:
             self.tag = self._options["tag"]
@@ -230,7 +238,7 @@ class PropagationRoutine(Routine):
         super().__init__(options)
         self._step = self._options["step"]
 
-    def __call__(self, system: _System):
+    def __call__(self, system: System):
         system.propagate(self._step)
         return
 

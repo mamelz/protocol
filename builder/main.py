@@ -1,17 +1,16 @@
-from __future__ import annotations
-
 import functools
 import typing
 from abc import ABC
 
 import numpy as np
 
-from . import errors
-from .stagecompiler import StageCompiler
-from .taskresolver import TaskResolver
 from .graph_classes.user import UserGraphRoot, UserGraphNode
 from .graph_classes.inter import InterGraphRoot, InterGraphNode
 from .graph_classes.run import RunGraphRoot
+from .routinegenerator import RoutineGenerator
+from .stagecompiler import StageCompiler
+from .taskresolver import TaskResolver
+from ..essentials import System
 from ..graph.base import GraphRoot
 from ..graph.spec import NodeConfigurationProcessor, GraphSpecification
 
@@ -29,6 +28,9 @@ def check_input(method):
 
 class GraphProcessor(ABC):
 
+    class GraphProcessorError(Exception):
+        pass
+
     userspec = UserGraphRoot.graph_spec
     intercls = InterGraphRoot
     interspec = InterGraphRoot.graph_spec
@@ -42,12 +44,12 @@ class GraphProcessor(ABC):
 
     def _check(self, graph: GraphRoot):
         if graph.graph_spec not in self.specs:
-            raise errors.GraphProcessorError(
+            raise self.GraphProcessorError(
                 "Unknown specification."
             )
 
         if not isinstance(graph, GraphRoot):
-            raise errors.GraphProcessorError(
+            raise self.GraphProcessorError(
                 f"Graph {graph} must be GraphRoot instance."
             )
 
@@ -61,7 +63,7 @@ class GraphBuilder(GraphProcessor):
                                       self.runcls._CHILD_TYPE)
 
     @check_input
-    def preprocess(self, user_graph: UserGraphRoot):
+    def preprocess(self, user_graph: UserGraphRoot) -> InterGraphRoot:
         return self.preprocessor.process(user_graph)
 
     @check_input
@@ -99,6 +101,10 @@ class GraphBuilder(GraphProcessor):
         self.runspec.processor.verify(rungraph, True)
 
         return rungraph
+
+    def generate_routines(self, system: System, run_graph: RunGraphRoot):
+        gen = RoutineGenerator()
+        return gen.make(system, run_graph)
 
 
 class Preprocessor(GraphProcessor):

@@ -1,4 +1,3 @@
-from . import errors
 from .graph_classes.user import UserGraphNode
 from .. inputparser.graph_classes.yaml import YAMLTaskNode
 
@@ -10,6 +9,9 @@ class TaskResolver:
     """Resolves tasks into routines and replaces the task node with the
     routines in the parent's children.
     """
+
+    class TaskResolverError(Exception):
+        pass
 
     def __init__(self, predefined_tasks: dict[str, dict]):
         self._predef_tasks = predefined_tasks
@@ -84,12 +86,12 @@ class TaskResolver:
         if task_node.type == "default":
             self._resolve_default(task_node)
         else:
-            raise errors.TaskResolverError(
+            raise self.TaskResolverError(
                 f"Cannot resolve task type {task_node.type}")
 
     def _resolve_default(self, task_node: UserGraphNode):
         if task_node.type != "default":
-            raise errors.TaskResolverError(
+            raise self.TaskResolverError(
                 f"Wrong type for task {task_node}")
 
         parent = task_node.parent

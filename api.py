@@ -2,20 +2,16 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .builder.graph_classes.run import RunGraphRoot
-    from .routine.classes import Routine
+    from .builder.main import Routine, RunGraphRoot
     from .inputparser.graph_classes.yaml import YAMLTaskNode
 
 import copy
 import textwrap
 from typing import Any, Sequence
 
-from .builder.graph_classes.user import UserGraphRoot
-from .builder.main import GraphBuilder
+from .builder.main import GraphBuilder, UserGraphRoot
 from .inputparser.main import YAMLParser
 from .essentials import Performable, Propagator, System
-from .routine.classes import PropagationRoutine
-from .routine.generator import RoutineGenerator
 
 
 class Protocol(Performable):
@@ -281,7 +277,7 @@ class Schedule(Performable):
         for i, routine in enumerate(self._routines):
             stage_idx = routine.stage_idx
 
-            if isinstance(routine, PropagationRoutine):
+            if routine.type == "propagation":
                 prop_string = f"PROPAGATE BY {routine.timestep:3.4f}"
                 name_string = (f">>>>>>>>>> {prop_string:^29} >>>>>>>>>>")
             else:
@@ -314,17 +310,20 @@ class Schedule(Performable):
                 self.results[output[0]].update(
                     {self._system.time: output[1]})
 
-    def build(self, start_time=None):
+    def build(self, start_time=None, graph_only=False):
         """Build the run graph and generate all routines.
 
         Args:
             start_time (float, optional): A start time to override the file
                 configuration.
+            graph_only (bool, optional): If True, only builds the graph and
+                doesn't generate routines.
 
         Raises:
-            ValueError: Raised, if no system is initialized.
+            ValueError: Raised, if no system is initialized and routines shall
+                be generated.
         """
-        if not self._system_initialized:
+        if (not self._system_initialized) and not graph_only:
             raise ValueError("No system is set for the schedule.")
 
         if start_time is not None:
@@ -332,8 +331,10 @@ class Schedule(Performable):
 
         builder = GraphBuilder(self._predef_tasks)
         self._run_graph = builder.build(self._user_graph)
-        rout_gen = RoutineGenerator()
-        self._routines = rout_gen.make(self._system, self._run_graph)
+        if graph_only:
+            return
+        self._routines = builder.generate_routines(
+            self._system, self._run_graph)
         for rout in self._routines:
             if rout.store_token in self._live_tracking:
                 rout.set_live_tracking(self._live_tracking[rout.store_token])

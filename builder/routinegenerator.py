@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..essentials import System
 
-from .classes import (
+from .routine_classes import (
     EvolutionRegularRoutine,
     MonitoringRoutine,
     PropagationRoutine,
@@ -11,7 +11,7 @@ from .classes import (
     Routine
 )
 
-from ..builder.graph_classes.run import RunGraphRoot
+from .graph_classes.run import RunGraphRoot
 
 
 class RoutineGenerator:

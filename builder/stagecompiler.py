@@ -1,6 +1,5 @@
 import numpy as np
 
-from . import errors
 from .graph_classes.run import RunGraphNode, RunGraphRoot
 from .graph_classes.inter import InterGraphNode
 from ..graph.base import GraphNodeMeta, GraphNodeID
@@ -8,7 +7,10 @@ from ..graph.spec import NodeConfigurationProcessor
 
 
 class StageCompiler:
-    """Constructs RunGraph stages from UserGraph stages."""
+    """Constructs RunGraph stages from InterGraph stages."""
+
+    class StageCompilerError(Exception):
+        pass
 
     def __init__(self, in_type: GraphNodeMeta, out_type: GraphNodeMeta):
         self._in_type = in_type
@@ -25,11 +27,11 @@ class StageCompiler:
     def compile(self, stage_node: InterGraphNode,
                 parent: RunGraphRoot) -> RunGraphNode:
         if stage_node.rank_name() != "Stage":
-            raise errors.StageCompilerError(
+            raise self.StageCompilerError(
                 "Input node must be of rank 'Stage'.")
 
         if not isinstance(stage_node, self._in_type):
-            raise errors.StageCompilerError(
+            raise self.StageCompilerError(
                 f"Input stage must be instance of {self._in_type},"
                 f" got {type(stage_node)}")
 
@@ -38,7 +40,7 @@ class StageCompiler:
         elif stage_node.type == "evolution":
             return self._compile_evolution(stage_node, parent)
         else:
-            raise errors.StageCompilerError(
+            raise self.StageCompilerError(
                 f"Unknown stage type {stage_node.type}")
 
     def _compile_regular(self, interstage: InterGraphNode,
