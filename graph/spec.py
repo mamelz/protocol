@@ -10,7 +10,12 @@ from collections import UserDict
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from .errors import NodeConfigurationError
+
+class NodeConfigurationError(Exception):
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
 
 
 class OptionsABC(dict, ABC):

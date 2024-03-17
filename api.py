@@ -2,8 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .builder.main import Routine, RunGraphRoot
-    from .inputparser.graph_classes.yaml import YAMLTaskNode
+    from .builder.main import RunGraphRoot
+    from .builder.routine_classes import Routine
 
 import copy
 import textwrap
@@ -152,7 +152,7 @@ class Schedule(Performable):
         super().__init__()
         self._configuration = sched_cfg
         self._user_graph = UserGraphRoot(sched_cfg)
-        self._predef_tasks: dict[str, YAMLTaskNode] = predef_tasks
+        self._predef_tasks = predef_tasks
         self._run_graph: RunGraphRoot = None
         if label is not None:
             self.label = label
