@@ -330,7 +330,7 @@ class Schedule(Performable):
             self.start_time = start_time
 
         builder = GraphBuilder(self._predef_tasks)
-        self._run_graph = builder.build(self._user_graph)
+        self._run_graph = builder(self._user_graph)
         if graph_only:
             return
         self._routines = builder.generate_routines(

@@ -15,9 +15,9 @@ class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
                    graph_spec=GraphSpecification(RUN_GRAPH_CONFIG_DICT)):
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None,
-                 ID=None):
+                 ID: tuple = None):
         super().__init__(parent, options, rank)
-        self._fixed_ID = ID
+        self._fixed_ID = GraphNodeID(ID) if ID is not None else None
 
     def _post_init(self):
         pass

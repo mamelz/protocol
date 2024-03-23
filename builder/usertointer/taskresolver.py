@@ -1,8 +1,7 @@
-from .graph_classes.user import UserGraphNode
-from .. inputparser.graph_classes.yaml import YAMLTaskNode
+from . import UserGraphNode
+from ...inputparser.graph_classes.yaml import YAMLTaskNode
 
-
-_usrcfg = UserGraphNode.graph_spec
+_usrcfg = UserGraphNode._GRAPH_SPEC
 
 
 class TaskResolver:

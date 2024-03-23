@@ -176,10 +176,10 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     isroot = False
 
-    @classmethod
-    @property
-    def graph_spec(cls):
-        return cls._GRAPH_SPEC
+#    @classmethod
+#    @property
+#    def graph_spec(cls):
+#        return cls._GRAPH_SPEC
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None):
         self._spec = None
@@ -339,7 +339,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             raise ValueError(
                 f"Node type already set to {self.type}")
         self.options.local["type"] = new
-        self._spec = self.graph_spec.ranks[self.rank_name()].types[self.type]
+        self._spec = self._GRAPH_SPEC.ranks[self.rank_name()].types[self.type]
 
     def _local_map(self) -> dict:
         """Return map of self and all subordinate nodes."""

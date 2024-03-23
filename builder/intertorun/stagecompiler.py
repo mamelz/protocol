@@ -1,9 +1,7 @@
 import numpy as np
 
-from .graph_classes.run import RunGraphNode, RunGraphRoot
-from .graph_classes.inter import InterGraphNode
-from ..graph.base import GraphNodeMeta, GraphNodeID
-from ..graph.spec import NodeConfigurationProcessor
+from ..graph_classes.run import RunGraphNode, RunGraphRoot
+from ..graph_classes.inter import InterGraphNode
 
 
 class StageCompiler:
@@ -12,17 +10,17 @@ class StageCompiler:
     class StageCompilerError(Exception):
         pass
 
-    def __init__(self, in_type: GraphNodeMeta, out_type: GraphNodeMeta):
-        self._in_type = in_type
-        self._out_type = out_type
-        self._out_rout_spec = self._out_type._GRAPH_SPEC.ranks["Routine"]
-        out_stg_spec = self._out_type._GRAPH_SPEC.ranks["Stage"]
+    input_type = InterGraphNode
+    output_type = RunGraphNode
+
+    def __init__(self):
+        self._out_rout_spec = self.output_type._GRAPH_SPEC.ranks["Routine"]
+        out_stg_spec = self.output_type._GRAPH_SPEC.ranks["Stage"]
         self._out_rout_keys = {
             k: v.options.keys() for k, v in self._out_rout_spec.types.items()
         }
         self._out_stg_keys = {k: v for k, v in out_stg_spec.types.items()}
-        self._out_config_proc = NodeConfigurationProcessor(
-            self._out_type._GRAPH_SPEC)
+        self._out_config_proc = self.output_type._GRAPH_SPEC.processor
 
     def compile(self, stage_node: InterGraphNode,
                 parent: RunGraphRoot) -> RunGraphNode:
@@ -30,9 +28,9 @@ class StageCompiler:
             raise self.StageCompilerError(
                 "Input node must be of rank 'Stage'.")
 
-        if not isinstance(stage_node, self._in_type):
+        if not isinstance(stage_node, self.input_type):
             raise self.StageCompilerError(
-                f"Input stage must be instance of {self._in_type},"
+                f"Input stage must be instance of {self.input_type},"
                 f" got {type(stage_node)}")
 
         if stage_node.type == "regular":
@@ -72,7 +70,7 @@ class StageCompiler:
         for opt in monroutopts:
             if "store_token" not in opt:
                 opt["store_token"] = opt["routine_name"]
-        out_stage: RunGraphNode = self._out_type(
+        out_stage: RunGraphNode = self.output_type(
             parent,
             {
                 "propagation_time": proptime,
@@ -168,8 +166,8 @@ class StageCompiler:
 
         def stage_routines_gen():
             for i, kwargs in enumerate(complete_timetable):
-                rout_id = GraphNodeID((*stage_id_tup, i))
-                yield self._out_type(**kwargs, ID=rout_id)
+                rout_id = tuple((*stage_id_tup, i))
+                yield self.output_type(**kwargs, ID=rout_id)
 
         out_stage.children = tuple((stage_routines_gen()))
         out_stage.options.update(
