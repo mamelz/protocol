@@ -50,9 +50,6 @@ class GraphNodeID:
         return f"{self.tuple}"
 
 
-NoneID = GraphNodeID(())
-
-
 class NodeChildren(Sequence):
 
     def __init__(self, children_iterable):
@@ -173,13 +170,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     _GRAPH_SPEC: GraphSpecification
     _CHILD_TYPE: GraphNodeMeta
-
     isroot = False
-
-#    @classmethod
-#    @property
-#    def graph_spec(cls):
-#        return cls._GRAPH_SPEC
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None):
         self._spec = None
@@ -399,23 +390,23 @@ class GraphNode(metaclass=GraphNodeABCMeta):
             node = node.children[idx]
         return node
 
-    def next(self, minrank=0, _i=0) -> Self:
+    def next(self, minrank=0, __i=0) -> Self:
         """
         The next node, the immediate sibling to the right. Parameter '__i' is
         for internal use.
         """
         if (self.ID.local < self.parent.num_children - 1) and (
                 self.rank > minrank):
-            if _i == 0:
+            if __i == 0:
                 return self.parent.children[self.ID.local + 1]
             else:
                 result: GraphNode = self.parent.children[self.ID.local + 1]
-                while _i > 0:
-                    _i -= 1
+                while __i > 0:
+                    __i -= 1
                     result = result.children[0]
                 return result
         elif self.rank > minrank:
-            return self.parent.next(minrank=minrank, _i=_i + 1)
+            return self.parent.next(minrank=minrank, __i=__i + 1)
         else:
             raise IndexError
 
@@ -424,7 +415,10 @@ class GraphNode(metaclass=GraphNodeABCMeta):
         return self.get_parent(self.rank - n)
 
     def previous(self, __i=0) -> Self:
-        """The previous node, the immediate sibling to the left."""
+        """
+        The previous node, the immediate sibling to the left. Parameter '__i'
+        is for internal use.
+        """
         if self.ID.local > 0:
             if __i == 0:
                 return self.parent.children[self.ID.local - 1]
@@ -522,7 +516,7 @@ class GraphRootMeta(GraphRootABCMeta):
 class GraphRoot(GraphNode, metaclass=GraphRootABCMeta):
     """Class for the root node of a graph.
 
-    Contains the additional attribute ._map and provides functionality to
+    Contains the additional property .map and provides functionality to
     ensure integrity of the graph options throughout execution.
     """
 
@@ -566,12 +560,14 @@ class GraphRoot(GraphNode, metaclass=GraphRootABCMeta):
             if node_id.rank != self.leaf_rank - 1:
                 only_leafs = False
                 break
+
         if only_leafs:      # only reconstructing the parents is sufficient
             for par in self._mutated_nodes_ids:
                 self._map.update(self.goto(par)._local_map())
+
+            self._mutated_nodes_ids = set()
         else:               # need to reconstruct all entries
             self._make_map()
-        self._mutated_nodes_ids = set()
 
     def copy(self) -> Self:
         """Return a deep copy of the GraphRoot object, includes all children.
