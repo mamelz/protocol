@@ -3,7 +3,7 @@ import typing
 
 from . import InterGraphRoot, RunGraphRoot, UserGraphRoot
 from .base import GraphProcessor
-from .intertorun.main import Inter2RunProcessor
+from .i2r.main import Inter2RunProcessor
 from .routine_classes import (
     EvolutionRegularRoutine,
     MonitoringRoutine,
@@ -11,7 +11,7 @@ from .routine_classes import (
     RegularRoutine,
     Routine
 )
-from .usertointer.main import User2InterProcessor
+from .u2i.main import User2InterProcessor
 from ..essentials import System
 
 
