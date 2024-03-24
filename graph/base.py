@@ -6,9 +6,7 @@ called 'options'. If a necessary option of a node is missing, it is inferred
 from its parent nodes, if available.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Self
-if TYPE_CHECKING:
-    from .spec import GraphSpecification
+from typing import Self
 
 import copy
 import functools
@@ -24,6 +22,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from functools import cache
 from itertools import chain
+
+from .spec import GraphSpecification
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +142,7 @@ class GraphNodeABCMeta(ABCMeta):
 class GraphNodeMeta(GraphNodeABCMeta):
     """Meta class for creation of node classes."""
     def __new__(mcls, name, bases, attrs, *,
-                graph_spec: GraphSpecification = None
+                graph_spec: dict = None
                 ) -> GraphNode:
         if len(bases) == 0:
             raise ValueError("Must be subclass of at least one"
@@ -154,10 +154,10 @@ class GraphNodeMeta(GraphNodeABCMeta):
         return super().__new__(mcls, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs,
-                 graph_spec: GraphSpecification = None):
+                 graph_spec: dict = None):
         super().__init__(name, bases, attrs)
         if graph_spec is not None:
-            cls._GRAPH_SPEC = graph_spec
+            cls._GRAPH_SPEC = GraphSpecification(graph_spec)
         else:
             cls._GRAPH_SPEC = bases[0]._GRAPH_SPEC
 
@@ -185,7 +185,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     def __iter__(self):
         """Iterator cycling through all nodes of local graph."""
-        return iter(self.map.values())
+        return iter(self._it)
 
     def __str__(self) -> str:
         return (
@@ -292,7 +292,7 @@ class GraphNode(metaclass=GraphNodeABCMeta):
 
     @property
     def map(self) -> dict[GraphNodeID, GraphNode]:
-        return self.root.map
+        return self._local_map()
 
     @property
     def num_children(self):
