@@ -1,7 +1,6 @@
 import numpy as np
 
-from ..graph_classes.run import RunGraphNode, RunGraphRoot
-from ..graph_classes.inter import InterGraphNode
+from .. import InterGraphNode, RunGraphNode, RunGraphRoot
 
 
 class StageCompiler:

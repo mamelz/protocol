@@ -1,10 +1,9 @@
 from .user_spec import USER_GRAPH_CONFIG_DICT
-from ...graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
-from ...graph.spec import GraphSpecification
+from .. import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
 
 
 class UserGraphNode(GraphNode, metaclass=GraphNodeMeta,
-                    graph_spec=GraphSpecification(USER_GRAPH_CONFIG_DICT)):
+                    graph_spec=USER_GRAPH_CONFIG_DICT):
 
     def _post_init(self):
         if not self.isleaf:

@@ -1,6 +1,6 @@
 from numpy import arange
 
-from . import UserGraphNode, UserGraphRoot, InterGraphNode, InterGraphRoot
+from .. import UserGraphNode, UserGraphRoot, InterGraphNode, InterGraphRoot
 
 
 class RoutineTranslator:

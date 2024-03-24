@@ -1,10 +1,9 @@
 from .inter_spec import INTER_GRAPH_CONFIG_DICT
-from ...graph.base import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
-from ...graph.spec import GraphSpecification
+from .. import GraphNode, GraphNodeMeta, GraphRoot, GraphRootMeta
 
 
 class InterGraphNode(GraphNode, metaclass=GraphNodeMeta,
-                     graph_spec=GraphSpecification(INTER_GRAPH_CONFIG_DICT)):
+                     graph_spec=INTER_GRAPH_CONFIG_DICT):
 
     def _post_init(self):
         pass

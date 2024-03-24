@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from .run_spec import RUN_GRAPH_CONFIG_DICT
-from ...graph.base import (
+from .. import (
     GraphNode,
     GraphNodeID,
     GraphNodeMeta,
     GraphRoot,
     GraphRootMeta
     )
-from ...graph.spec import GraphSpecification
 
 
 class RunGraphNode(GraphNode, metaclass=GraphNodeMeta,
-                   graph_spec=GraphSpecification(RUN_GRAPH_CONFIG_DICT)):
+                   graph_spec=RUN_GRAPH_CONFIG_DICT):
 
     def __init__(self, parent: GraphNode, options: dict, rank: int = None,
                  ID: tuple = None):

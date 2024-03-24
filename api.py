@@ -10,7 +10,7 @@ import textwrap
 from typing import Any, Sequence
 
 from .builder.main import GraphBuilder, UserGraphRoot
-from .inputparser.main import YAMLParser
+from .inputparser.main import FileParser
 from .essentials import Performable, Propagator, System
 
 
@@ -121,37 +121,28 @@ class Schedule(Performable):
 
     @classmethod
     def from_yaml(cls, yaml_path: str, label: str | int = None
-                  ) -> Schedule | tuple[Schedule]:
+                  ) -> Schedule:
         """Construct schedule from path to yaml configuration file.
-
-        If the file contains multiple schedule configurations, returns a tuple
-        of all schedules.
 
         Args:
             yaml_path (str): Path to configuration file.
             label (str | int, optional): Label for the schedule.
-                Cannot be passed if multiple schedules are defined by the
-                configuration file.
 
         Returns:
-            Schedule | tuple[Schedule]: Schedule(s) defined in the file.
+            Schedule: Schedule defined in the file.
         """
 
-        sched_cfg, tasks = YAMLParser().parse_from_file(yaml_path)
-        if len(sched_cfg) > 1:
-            if label is not None:
-                raise ValueError("When mutiple schedules are defined, label"
-                                 " must be None")
-            return (cls(cfg, label) for cfg in sched_cfg)
+        filegraph = FileParser().parse_yaml(yaml_path)
+        if len(filegraph.schedules) > 1:
+            raise ValueError("Can only make one schedule at a time. Try the"
+                             " 'Protocol' class.")
+        return cls(filegraph.schedules[0], label, filegraph.predeftasks)
 
-        return cls(sched_cfg[0], label, tasks)
-
-    def __init__(self, sched_cfg: dict, label: str | int = None,
+    def __init__(self, sched_graph: UserGraphRoot, label: str | int = None,
                  predef_tasks: dict = {}):
         """Construct schedule from configuration dictionary."""
         super().__init__()
-        self._configuration = sched_cfg
-        self._user_graph = UserGraphRoot(sched_cfg)
+        self._user_graph = sched_graph
         self._predef_tasks = predef_tasks
         self._run_graph: RunGraphRoot = None
         if label is not None:

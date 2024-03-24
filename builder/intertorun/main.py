@@ -1,6 +1,6 @@
-from . import InterGraphRoot, RunGraphRoot
 from .stagecompiler import StageCompiler
 from ..base import GraphProcessor
+from .. import InterGraphRoot, RunGraphRoot
 
 
 class Inter2RunProcessor(GraphProcessor):

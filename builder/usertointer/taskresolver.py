@@ -1,5 +1,5 @@
-from . import UserGraphNode
-from ...inputparser.graph_classes.yaml import YAMLTaskNode
+from .. import UserGraphNode
+from ...graph_classes.parser.file import PreDefinedTask
 
 _usrcfg = UserGraphNode._GRAPH_SPEC
 
@@ -15,7 +15,7 @@ class TaskResolver:
     def __init__(self, predefined_tasks: dict[str, dict]):
         self._predef_tasks = predefined_tasks
         for task_opts in self._predef_tasks.values():
-            if not isinstance(task_opts, YAMLTaskNode):
+            if not isinstance(task_opts, PreDefinedTask):
                 raise TypeError
 
     def inline(self, task_node: UserGraphNode, graph=False):
@@ -36,7 +36,7 @@ class TaskResolver:
 
     def _inline_evolution(self, task_node: UserGraphNode):
         taskname = task_node.options["name"]
-        predef_task: YAMLTaskNode = self._predef_tasks[taskname]
+        predef_task: PreDefinedTask = self._predef_tasks[taskname]
 
         rout_opts = [r.options.local.copy() for r in predef_task.routines]
         for opt in rout_opts:
@@ -64,7 +64,7 @@ class TaskResolver:
 
     def _inline_regular(self, task_node: UserGraphNode):
         taskname = task_node.options["name"]
-        predef_task: YAMLTaskNode = self._predef_tasks[taskname]
+        predef_task: PreDefinedTask = self._predef_tasks[taskname]
         inlined_task = UserGraphNode(
             task_node.parent,
             predef_task.options.local,

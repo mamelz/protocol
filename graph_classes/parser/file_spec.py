@@ -1,9 +1,7 @@
-from ...builder.graph_classes.user_spec import USER_GRAPH_CONFIG_DICT as _ucfg
-from ...graph.spec import GraphSpecification
+from ..builder.user_spec import USER_GRAPH_CONFIG_DICT as _ucfg
 
 
-_usr_graph_cfg = GraphSpecification(_ucfg)
-INPUT_CONFIG_DICT = {
+FILE_CONFIG_DICT = {
     "ranks": {
         "NONE": {
             "NONE": {}
@@ -22,40 +20,31 @@ INPUT_CONFIG_DICT = {
                 }
             },
         },
-        "schedule": {
-            "default": {
-                **_usr_graph_cfg.ranks["Schedule"].types["default"].dictionary
-            }
-        },
         "task": {
             "default": {
                 "mandatory": {
                     "name": {
                         "types": (str,)
                     },
-                    **_usr_graph_cfg.ranks["Task"].types[
-                        "default"].options.mandatory
+                    **_ucfg["ranks"]["Task"]["default"]["mandatory"]
                 },
-                "optional": _usr_graph_cfg.ranks["Task"].types[
-                    "default"].options.optional
+                "optional": _ucfg["ranks"]["Task"]["default"]["optional"]
             }
         },
         "routine": {
             "task-regular": {
-                **_usr_graph_cfg.ranks["Routine"].types["regular"].dictionary
+                **_ucfg["ranks"]["Routine"]["regular"]
             },
             "task-evolution": {
                 "mandatory": {
-                    **_usr_graph_cfg.ranks["Routine"].types[
-                        "evolution"].options.mandatory
+                    **_ucfg["ranks"]["Routine"]["evolution"]["mandatory"]
                 },
                 "optional": {
                     "tasktime": {
                         "types": (float,),
                         "default": 0.0
                     },
-                    **_usr_graph_cfg.ranks["Routine"].types[
-                        "evolution"].options.optional,
+                    **_ucfg["ranks"]["Routine"]["evolution"]["optional"],
                     "tag": {
                         "types": (str,),
                         "default": "TASK"

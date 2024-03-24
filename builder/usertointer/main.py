@@ -1,7 +1,7 @@
-from . import UserGraphRoot, InterGraphNode, InterGraphRoot
 from .routinetranslator import RoutineTranslator
 from .taskresolver import TaskResolver
 from ..base import GraphProcessor
+from .. import UserGraphRoot, InterGraphNode, InterGraphRoot
 
 
 class User2InterProcessor(GraphProcessor):

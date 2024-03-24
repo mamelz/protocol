@@ -1,10 +1,8 @@
 import functools
 import typing
 
+from . import InterGraphRoot, RunGraphRoot, UserGraphRoot
 from .base import GraphProcessor
-from .graph_classes.user import UserGraphRoot
-from .graph_classes.inter import InterGraphRoot
-from .graph_classes.run import RunGraphRoot
 from .intertorun.main import Inter2RunProcessor
 from .routine_classes import (
     EvolutionRegularRoutine,
